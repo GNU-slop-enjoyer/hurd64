@@ -17,6 +17,11 @@
   prepared.qcow2 instead, or reinstall each boot.
 
 ## Next commands
+0. SMP hang (see PROJECT_STATUS.md "Hang isolation"). Reproduce: `vm/boot.sh smp4 4` with NOSMP=1,
+   then `vm/stress2.sh 4`. Layers: `vm/mklayer.sh up|upapic|smp4|stock`; kernels in
+   ~/src/hurd64/build/gnumach-<k>. Next: in kdb on the hang, check each CPU (`show all threads`
+   per processor, pmap shootdown state) and read i386/intel/pmap.c shootdown + kern/sched_prim.c
+   idle wakeup for a path that can wait on a parked AP. Then try ncpus=2 on 2 vCPUs.
 1. Build upstream Hurd in the VM, APs parked (stable):
    `cd /build/hurd && autoreconf -fi && mkdir -p b && cd b && ../configure --without-parted
    --disable-profile && make -j4 ext2fs` ; then boot with the new ext2fs.static (copy to /hurd,

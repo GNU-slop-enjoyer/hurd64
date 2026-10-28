@@ -26,6 +26,28 @@ Target machine: Ryzen 9 9950X (16c/32t), 30 GB RAM, UEFI only. Target disk: Neta
 | Parallel fs load, SMP kernel, APs active | **FAIL** (hang), 2 and 8 CPUs | all CPUs idle; ext2fs threads asleep in `gsync_wait`, rumpdisk idle in `mach_msg`. See docs/TESTING.md |
 | Boot with >3.5 GB RAM | **FAIL** | `ext2fs: part:2:device:wd0: Input/output error` at 4 GB, fine at 2 GB. Blocks the real machine (30 GB) |
 
+## Hang isolation (2026-10-29), `vm/stress2.sh` (8x ls -lR + 4x cp -a /usr/share/doc + rm + sync)
+
+All kernels below are upstream gnumach fa3026b9 unless marked Debian. 4 vCPUs unless noted. 2 GB RAM.
+
+| Kernel build | CPUs running tasks | Result |
+|---|---|---|
+| Debian stock 1.8+git20260224 UP | 1 | **hang, run 1** |
+| upstream UP (no APIC) | 1 | pass 3/3 (22-30 s) |
+| upstream UP + `--enable-apic` | 1 | pass 4/4 |
+| upstream `ncpus=4` on a **1-vCPU** VM | 1 | pass 4/4 |
+| upstream `ncpus=4`, APs parked | 1 | hang, run 3 |
+| upstream `ncpus=64`, APs parked | 1 | KERN_NO_SPACE from cp, then hang, run 1 |
+| upstream `ncpus=64`, APs active | 4 | KERN_INVALID_ADDRESS from cp, then hang, run 1 |
+
+Conclusions so far:
+- Debian's kernel has a write-load hang that current upstream no longer has (UP build passes).
+- The SMP problem needs a second CPU to *exist*: it happens even when the APs run no user
+  tasks, and not with an NCPUS>1 kernel on one CPU. Device IRQs are routed to CPU 0 only
+  (ioapic.c: FIXED, physical dest = BSP APIC id), so misrouted IRQs are ruled out.
+  Suspects: cross-CPU signalling (TLB shootdown IPIs, cause_ast_check / idle wakeup) and
+  ncpus-sized kernel memory (ncpus=64 fails much faster than ncpus=4).
+
 ## Fallback API
 Not configured (no key stored). See docs/API_AND_TOOLS.md.
 
