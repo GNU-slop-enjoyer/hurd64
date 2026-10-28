@@ -26,5 +26,8 @@ Target machine: Ryzen 9 9950X (16c/32t), 30 GB RAM, UEFI only. Target disk: Neta
 | Parallel fs load, SMP kernel, APs active | **FAIL** (hang), 2 and 8 CPUs | all CPUs idle; ext2fs threads asleep in `gsync_wait`, rumpdisk idle in `mach_msg`. See docs/TESTING.md |
 | Boot with >3.5 GB RAM | **FAIL** | `ext2fs: part:2:device:wd0: Input/output error` at 4 GB, fine at 2 GB. Blocks the real machine (30 GB) |
 
+## Fallback API
+Not configured (no key stored). See docs/API_AND_TOOLS.md.
+
 ## Not started
 NVMe driver, RTL8125 driver, UEFI boot on the real machine, display/input, GPU, Wayland, install.
