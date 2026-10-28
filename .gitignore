@@ -1,0 +1,7 @@
+*.qcow2
+*.img
+*.png
+*.ppm
+serial.log
+qemu.log
+id_hurd*
