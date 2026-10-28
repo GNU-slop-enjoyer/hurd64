@@ -17,7 +17,18 @@
   prepared.qcow2 instead, or reinstall each boot.
 
 ## Next commands
-0. SMP hang (see PROJECT_STATUS.md "Hang isolation"). Reproduce: `vm/boot.sh smp4 4` with NOSMP=1,
+0. SMP hang (see PROJECT_STATUS.md "The hang, as seen in kdb"). Open question: why does
+   CPU 0 not pick up next_thread although it is awake every tick? Next checks, in order:
+   a. In kdb on the hang, `x/x` the idle loop's view: read %gs:0 for CPU 0 (percpu self) and
+      compare with percpu_array[0]; read processor state again after `c` + 3 s to see whether
+      state/next_thread are stable or being rewritten (a dispatch/requeue loop).
+   b. Add a counter in the idle loop exit path and in thread_setrun's DISPATCHING branch
+      (kdb-readable globals) to see whether CPU 0 ever leaves the loop after the hang.
+   c. Read kern/sched_prim.c after `retry:` (state DISPATCHING handling, pset lock) and
+      processor_assign/action_thread: parked APs have pending assignment state (MACH_HOST).
+   Kernel branches: ~/src/hurd64/upstream/gnumach tux/idle-race (base), tux/bsp-lapic-timer,
+   tux/idle-reread. Build dirs ~/src/hurd64/build/gnumach-<name>, layers vm/mklayer.sh <name>.
+   Earlier isolation (see "Hang isolation"). Reproduce: `vm/boot.sh smp4 4` with NOSMP=1,
    then `vm/stress2.sh 4`. Layers: `vm/mklayer.sh up|upapic|smp4|stock`; kernels in
    ~/src/hurd64/build/gnumach-<k>. Next: in kdb on the hang, check each CPU (`show all threads`
    per processor, pmap shootdown state) and read i386/intel/pmap.c shootdown + kern/sched_prim.c

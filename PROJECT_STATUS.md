@@ -48,6 +48,26 @@ Conclusions so far:
   Suspects: cross-CPU signalling (TLB shootdown IPIs, cause_ast_check / idle wakeup) and
   ncpus-sized kernel memory (ncpus=64 fails much faster than ncpus=4).
 
+## The hang, as seen in kdb (2026-10-29)
+Every hang dump has the same shape:
+- A runnable kernel thread (`io_done`, `R..ON.P`) is on **no run queue** (thread->runq == 0).
+- CPU 0 (default pset): `state = PROCESSOR_DISPATCHING`, `next_thread` = that thread.
+  CPU 0 runs its own `idle/0`, stopped right after `hlt` in idle_thread_continue.
+- APs 1-3: PROCESSOR_IDLE, in slave_pset (parked).
+- ext2fs and netdde threads sleep in gsync_wait behind the stuck I/O completion.
+- CPU 0 does get clock ticks (elapsed_ticks +403 in ~4 s).
+
+So CPU 0 is handed a thread and keeps going back to sleep. Tried, none fixes it:
+
+| Change (patches/gnumach/) | Result |
+|---|---|
+| idle-race: check for work with interrupts off, then `sti; hlt` | still hangs (kept, it closes a real window) |
+| bsp-lapic-timer: re-apply upstream f41f8801 (reverted upstream in ddb0766a; LAPIC timer on CPU 0 too) | still hangs; CPU 0 timer then periodic and counting |
+| idle-reread EXPERIMENT: re-read current_processor() every loop pass | still hangs, so a clobbered register is not it |
+
+Without f41f8801, CPU 0's LAPIC timer is left masked in one-shot mode by calibrate_lapic_timer
+(LVT 0x10030) and CPU 0's clock is the PIT, by upstream design.
+
 ## Fallback API
 Not configured (no key stored). See docs/API_AND_TOOLS.md.
 

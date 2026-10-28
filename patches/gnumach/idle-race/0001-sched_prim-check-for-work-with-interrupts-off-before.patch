@@ -1,0 +1,59 @@
+From e78fb2b665977d30f53f1a095a808d5837971086 Mon Sep 17 00:00:00 2001
+From: GNU-slop-enjoyer <johnepstein420@gmail.com>
+Date: Thu, 29 Oct 2026 00:24:00 +0100
+Subject: [PATCH] sched_prim: check for work with interrupts off before halting
+ the idle cpu
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ i386/i386/model_dep.h | 11 +++++++++++
+ kern/sched_prim.c     | 10 ++++++++++
+ 2 files changed, 21 insertions(+)
+
+diff --git a/i386/i386/model_dep.h b/i386/i386/model_dep.h
+index 16cf1dfb..6ece394d 100644
+--- a/i386/i386/model_dep.h
++++ b/i386/i386/model_dep.h
+@@ -41,6 +41,17 @@ extern void machine_init (void);
+ /* Conserve power on processor CPU.  */
+ extern void machine_idle (int cpu);
+ 
++#ifndef MACH_HYP
++/* The idle loop checks for work and then halts. A wakeup that arrives
++   between the check and the halt would otherwise only be seen at the next
++   interrupt, so the check runs with interrupts off and the halt re-enables
++   them atomically (sti; hlt).  */
++#define MACHINE_IDLE_ATOMIC 1
++static inline void machine_idle_disable (void) { asm volatile ("cli" : : : "memory"); }
++static inline void machine_idle_enable (void) { asm volatile ("sti" : : : "memory"); }
++static inline void machine_idle_wait (void) { asm volatile ("sti; hlt" : : : "memory"); }
++#endif
++
+ extern void resettodr (void);
+ 
+ extern void startrtclock (void);
+diff --git a/kern/sched_prim.c b/kern/sched_prim.c
+index 8cf2ab27..833822b0 100644
+--- a/kern/sched_prim.c
++++ b/kern/sched_prim.c
+@@ -1682,7 +1682,17 @@ static void __attribute__((noreturn)) idle_thread_continue(void)
+ 			 * to conserve power.
+ 			 */
+ #if	POWER_SAVE
++#ifdef	MACHINE_IDLE_ATOMIC
++			machine_idle_disable();
++			if ((*threadp == (volatile thread_t)THREAD_NULL) &&
++			    (*gcount == 0) && (*lcount == 0) &&
++			    !(need_ast[mycpu] &~ AST_SCHEDULING))
++				machine_idle_wait();
++			else
++				machine_idle_enable();
++#else	/* MACHINE_IDLE_ATOMIC */
+ 			machine_idle(mycpu);
++#endif	/* MACHINE_IDLE_ATOMIC */
+ #endif /* POWER_SAVE */
+ 		}
+ 
+-- 
+2.55.0
+

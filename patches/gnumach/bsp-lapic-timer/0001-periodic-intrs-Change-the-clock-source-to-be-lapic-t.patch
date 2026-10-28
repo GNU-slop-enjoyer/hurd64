@@ -1,0 +1,80 @@
+From fd26ec994e0ce9676da2f498632d5bbf713fee93 Mon Sep 17 00:00:00 2001
+From: Damien Zammit <damien@zamaudio.com>
+Date: Sat, 28 Feb 2026 06:14:08 +0000
+Subject: [PATCH] periodic intrs: Change the clock source to be lapic timer on
+ all cpus
+
+There were problems resuming the lapic timer, causing lockups on -smp 2.
+We used to use the PIT on cpu0 for clock interrupts and lapic timer
+for periodic interrupts on other cpus.  Now the PIT is only used to
+calibrate the lapic timer to unify the clock sources to be lapic based.
+Re-enable the lapic timer on all cpus for clock sources of periodic intrs.
+
+TESTED:
+ - Passes i386 CI
+ - Passes x86_64 CI (except user32)
+ - Boots to debian login using -smp 2 or 6
+ - Interrupts are received periodically on all cpus
+   - (printed all cpu numbers in hardclock)
+
+Reported by Brent Baccala (and -smp 2 issue also known for a while)
+
+Message-ID: <20260228061355.3207119-1-damien@zamaudio.com>
+---
+ i386/i386/mp_desc.c     |  4 ++++
+ i386/i386at/model_dep.c | 17 +++++++++++++----
+ 2 files changed, 17 insertions(+), 4 deletions(-)
+
+diff --git a/i386/i386/mp_desc.c b/i386/i386/mp_desc.c
+index 1343861c..1d60c892 100644
+--- a/i386/i386/mp_desc.c
++++ b/i386/i386/mp_desc.c
+@@ -340,5 +340,9 @@ start_other_cpus(void)
+ 
+ 	/* Re-enable IOAPIC interrupts as per setup */
+ 	lapic_enable();
++
++	/* Re-enable lapic timer for clock interrupts on BSP.
++	 * This is needed after lapic was disabled/enabled */
++	lapic_enable_timer();
+ }
+ #endif	/* NCPUS > 1 */
+diff --git a/i386/i386at/model_dep.c b/i386/i386at/model_dep.c
+index 84c8c966..ffb2cce8 100644
+--- a/i386/i386at/model_dep.c
++++ b/i386/i386at/model_dep.c
+@@ -180,6 +180,11 @@ void machine_init(void)
+ #if defined(APIC)
+ 	ioapic_configure();
+ #endif
++	/*
++	 * Start PIT clock interrupts, this is used
++	 * initially before lapic timer is calibrated
++	 * for use as a periodic clock source.
++	 */
+ 	clkstart();
+ 
+ 	/*
+@@ -926,11 +931,15 @@ void
+ startrtclock(void)
+ {
+ #ifdef APIC
+-	unmask_irq(timer_pin);
+-	calibrate_lapic_timer();
+-	if (cpu_number() != 0) {
+-		lapic_enable_timer();
++	if (cpu_number() == 0) {
++		/* cpu0 calls this before other cpus do
++		 * to calibrate the lapic timer once for all cpus. */
++		unmask_irq(timer_pin);
++		calibrate_lapic_timer();
++		mask_irq(timer_pin);
++		/* The PIT is no longer required past here */
+ 	}
++	lapic_enable_timer();
+ #else
+ 	clkstart();
+ #ifndef MACH_HYP
+-- 
+2.55.0
+

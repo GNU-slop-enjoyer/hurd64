@@ -1,0 +1,29 @@
+From 5ae8232f10c7c6c9add93114fd7584ea03db9881 Mon Sep 17 00:00:00 2001
+From: GNU-slop-enjoyer <johnepstein420@gmail.com>
+Date: Thu, 29 Oct 2026 00:30:59 +0100
+Subject: [PATCH] EXPERIMENT: idle loop re-reads current_processor() every pass
+
+---
+ kern/sched_prim.c | 6 +++++-
+ 1 file changed, 5 insertions(+), 1 deletion(-)
+
+diff --git a/kern/sched_prim.c b/kern/sched_prim.c
+index 833822b0..d16987c9 100644
+--- a/kern/sched_prim.c
++++ b/kern/sched_prim.c
+@@ -1664,7 +1664,11 @@ static void __attribute__((noreturn)) idle_thread_continue(void)
+  *	This cpu will be dispatched (by thread_setrun) by setting next_thread
+  *	to the value of the thread to run next.  Also check runq counts.
+  */
+-		while ((*threadp == (volatile thread_t)THREAD_NULL) &&
++		/* EXPERIMENT: re-derive the processor through %gs on every
++		   pass instead of trusting values kept in registers. */
++		while ((threadp = (volatile thread_t *) &current_processor()->next_thread,
++		        lcount = (volatile int *) &current_processor()->runq.count,
++		        *threadp == (volatile thread_t)THREAD_NULL) &&
+ 		       (*gcount == 0) && (*lcount == 0)) {
+ 
+ 			/* check for ASTs while we wait */
+-- 
+2.55.0
+
