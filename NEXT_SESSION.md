@@ -25,6 +25,8 @@
    the unstripped build.
 3. >3.5 GB RAM I/O error in rumpdisk (DMA address limit).
 4. NVMe for rumpdisk (NetBSD nvme(4)), rge(4) for the RTL8125.
-5. Publish: `gh repo create GNU-slop-enjoyer/tuxhurd --public --source . --push` once the user allows it.
+5. Published: https://github.com/GNU-slop-enjoyer/tuxhurd (public, user approved 2026-10-28). Push after each verified step.
+6. Install decision (user, 2026-10-28): wipe tuxmin and give Hurd the whole Netac ...205715 disk. Still show the exact plan and get a final OK right before writing.
+7. Free API: the user said they will add a Groq key (`freellm key groq`). Test with a "Reply OK" request before any use.
 
 Limits: builds -j8 at most on the host, -j4 in the VM; VM 2 GB RAM.

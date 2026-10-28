@@ -20,5 +20,4 @@ free chat API is not an agent that can safely drive this machine. Supported inst
 ## Other tools
 - Context7 connector: library docs (added 2026-10-28, not used yet).
 - Gmail / Calendar / Drive: connected; no project material found (empty Drive, empty calendar).
-- GitHub: `gh` logged in as GNU-slop-enjoyer. Creating the public repo was refused by the
-  permission system on 2026-10-28; needs the user's go-ahead.
+- GitHub: https://github.com/GNU-slop-enjoyer/tuxhurd, public, created with the user's OK on 2026-10-28.
