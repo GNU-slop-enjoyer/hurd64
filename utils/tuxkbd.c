@@ -39,6 +39,10 @@ struct wscons_event {
 #define WSCONS_EVENT_KEY_UP	1
 #define WSCONS_EVENT_KEY_DOWN	2
 
+/* the rump kernel runs in this process; ask it for wskbd's real major */
+extern int rumpns_devsw_name2chr(const char *, char *, size_t);
+static const char *kbd_node = "/dev/wskbd";
+
 /* USB HID usage codes (ukbd passes them through as key codes) */
 enum {
 	K_ENTER = 0x28, K_ESC, K_BACKSPACE, K_TAB, K_SPACE,
@@ -120,8 +124,11 @@ static void *keyboard(void *arg)
 	/* USB discovery runs in the background and keyboards can be plugged in
 	   later: keep trying until one shows up */
 	LOG("waiting for a keyboard\n");
-	for (int tries = 0; (fd = rump_sys_open("/dev/wskbd", RUMP_O_RDONLY)) < 0; tries++)
+	for (int tries = 0; (fd = rump_sys_open(kbd_node, RUMP_O_RDONLY)) < 0; tries++) {
+		if (tries == 0)
+			LOG("open %s: error %d\n", kbd_node, errno);
 		sleep(tries < 30 ? 1 : 5);
+	}
 	LOG("keyboard open (fd %d)\n", fd);
 
 	int shift = 0, ctrl = 0, alt = 0, caps = 0;
@@ -253,6 +260,15 @@ int main(int argc, char **argv)
 		dprintf(out, "tuxkbd: rump_init failed\r\n");
 		return 1;
 	}
+
+	/* /dev/wskbd from the wscons component can carry another driver's major
+	   (open fails with ENXIO); make a node from the major wskbd really got */
+	rump_schedule();
+	int maj = rumpns_devsw_name2chr("wskbd", NULL, 0);
+	rump_unschedule();
+	LOG("wskbd major %d\n", maj);
+	if (maj >= 0 && rump_sys_mknod("/dev/tuxwskbd0", 0020000 | 0600, (uint64_t)maj << 8) == 0)
+		kbd_node = "/dev/tuxwskbd0";
 
 	pthread_t kt, st, ct;
 	pthread_create(&kt, NULL, keyboard, NULL);
