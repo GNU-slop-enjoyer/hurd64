@@ -36,7 +36,11 @@ ext2fs mitigation (2026-10-30): an idle boot + clean poweroff leaves 3 "deleted 
 with FSCKFIX=yes, so it repairs itself and never stops in a maintenance shell (2 boots tested).
 Root cause (processes still running when ext2fs syncs at shutdown) is still open.
 DISK REINSTALLED 2026-10-30 from install4.raw = PC-VM-tested image (USB keyboard login, quiet console).
-SMP retest 2026-10-30 (ncpus=4 kernel with all fixes, ESP vm/esp-smp, `ESPDIR=esp-smp vm/run-pc.sh 4` + smpctl):
+SMP ROOT CAUSE FOUND 2026-10-30: it is a race in ext2fs (libdiskfs/libpager), not the kernel.
+utils/cpuset.c puts a task in its own 1-CPU processor set (task_assign). With root ext2fs (pid 8) pinned to
+cpu 3 and everything else on cpus 0-2: 0 "invalid address", no hang, stress2 4/4 (36 s each). Without the
+pin: 86 errors + hang. Workaround: at boot smpctl + cpuset all ext2fs. Real fix: find the race.
+Earlier: SMP retest 2026-10-30 (ncpus=4 kernel with all fixes, ESP vm/esp-smp, `ESPDIR=esp-smp vm/run-pc.sh 4` + smpctl):
 stress2 run 1 => hundreds of `cp: error writing ...: (os/kern) invalid address` (KERN_INVALID_ADDRESS on
 io_write data), then a hang. So with several active CPUs, a task's memory looks unmapped to the kernel
 while copying: suspect the cross-CPU pmap/TLB shootdown on x86_64 (i386/intel/pmap.c: pmap_update_interrupt,
