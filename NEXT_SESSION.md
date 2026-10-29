@@ -21,7 +21,18 @@
 then GPU on the Granite Ridge iGPU only, then Wayland.
 
 ## State 2026-10-29 evening: items 2, 3, 5, 6 done in QEMU and installed on the disk (UEFI, NVMe root ld2, framebuffer console). Open: item 1 (SMP hang), item 4 (RTL8125 rge component for rumpnet), real-hardware boot test (user), NVMe+AHCI shared-IRQ freeze, USB keyboard.
-Next: rge(4) rump component (rumpkernel tree on Salsa: buildrump.sh/src/sys/dev/pci/if_rge.c, model on libpci_if_wm), build librumpdev_pci_if_rge in the VM, link into rumpnet.
+Item 4 (rge) exact next steps (build started 2026-10-29 ~17:40 in the VM):
+  1. Build VM: `DISK=prepared-nvme.qcow2 ESPDIR=esp-fb FW=efi NVME_ADDR=0x6 BUS=nvme MEM=3G
+     EXTRA="-drive file=build.img,format=raw,if=ide,index=2,cache=writeback" vm/run.sh 2`, then in the
+     VM `settrans -ac /build /hurd/ext2fs /dev/wd1` (wd1 = label hurdbuild). Log: /build/rk-build.log
+     (ends with EXIT=0 on success); .debs land in /build.
+  2. `dpkg -i /build/librump*_0~20250111-10tux1_*.deb`; check /usr/lib/librumpdev_pci_if_rge*.
+  3. Build rumpnet from ~/src/hurd64/upstream/hurd branch tux/rumpnet-rge (git archive | ssh,
+     configure, `make rumpnet`), copy rumpnet.static to /hurd/rumpnet, check `nm | grep rge_attach`.
+  4. Do steps 2-3 in prepared-install.qcow2, add `settrans -c /dev/rge0 /hurd/devnode -M /dev/net rge0`
+     and `auto /dev/rge0` + `iface /dev/rge0 inet dhcp` to /etc/network/interfaces, then redo the
+     install image (qemu-img convert) and run install/install.sh, or copy just the changed files
+     with `tuxdisk mount 2` + `tuxdisk put 2 <dir>`.
 
 Item 3: WORKS in the VM (see PROJECT_STATUS.md). Remaining bug: NVMe+AHCI sharing an IRQ line freezes on the next PCI driver start (device/intr.c masking lead). Old notes:
   the stall after `entropy: best effort` in rumpdisk's rump kernel with NVMe loaded.
