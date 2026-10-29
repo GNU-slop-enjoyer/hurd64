@@ -20,7 +20,9 @@
 1 SMP hang, 2 >3.5 GB RAM, 3 NVMe, 4 RTL8125, 5 UEFI boot on the real PC, 6 install (wipes tuxmin, final OK first),
 then GPU on the Granite Ridge iGPU only, then Wayland.
 
-## Current item: 3 (NVMe), then 4-6. Item 1 (SMP hang) is parked; item 2 is done for AHCI/NVMe.
+## State 2026-10-29 evening: items 2, 3, 5, 6 done in QEMU and installed on the disk (UEFI, NVMe root ld2, framebuffer console). Open: item 1 (SMP hang), item 4 (RTL8125 rge component for rumpnet), real-hardware boot test (user), NVMe+AHCI shared-IRQ freeze, USB keyboard.
+Next: rge(4) rump component (rumpkernel tree on Salsa: buildrump.sh/src/sys/dev/pci/if_rge.c, model on libpci_if_wm), build librumpdev_pci_if_rge in the VM, link into rumpnet.
+
 Item 3: WORKS in the VM (see PROJECT_STATUS.md). Remaining bug: NVMe+AHCI sharing an IRQ line freezes on the next PCI driver start (device/intr.c masking lead). Old notes:
   the stall after `entropy: best effort` in rumpdisk's rump kernel with NVMe loaded.
   a. Done: AHCI root on the same layer boots, so the hurd package isn't it. A shared IRQ

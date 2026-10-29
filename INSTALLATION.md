@@ -9,7 +9,7 @@ tuxmin was wiped, with the user's OK.
 |---|---|---|
 | p1 | 953 MiB | swap |
 | p2 | 32 GiB | root, ext2 (Debian GNU/Hurd amd64 2026-03-14 + Hurd 20261028 packages + patches) |
-| p3 | 512 MiB | EFI system partition, FAT32, label TUXHURD: EFI/BOOT/BOOTX64.EFI (GRUB, config built in), gnumach-efi.gz, acpi-efi.static |
+| p3 | 512 MiB | EFI system partition, FAT32, label TUXHURD: EFI/BOOT/BOOTX64.EFI (GRUB, config built in: gnumach-fb.gz, gfxpayload=keep), gnumach-fb.gz, acpi-efi.static (gnumach-efi.gz is the older serial-console kernel, unused) |
 
 Made by `install/install.sh vm/install.raw vm/esp-install.tar`. install.raw = `qemu-img convert`
 of the VM layer prepared-install.qcow2. ESP = `vm/mkesp.sh vm/efi/grub-install.cfg esp-install`.
@@ -21,8 +21,9 @@ menu (F8/F11/F12 on most boards) and pick the Netac drive, or the removable path
 EFI/BOOT/BOOTX64.EFI. Linux on the other disk is untouched.
 
 ## Known limits on the real machine
-- Kernel console is serial (console=com0): the screen stays black after GRUB. A framebuffer
-  console is the next task.
+- The kernel console draws on the UEFI framebuffer (patches/gnumach/fbcon): boot messages and
+  a "tuxhurd console login:" prompt. Hurd's own console client (VGA text) shows nothing on real
+  UEFI hardware; log in at the console prompt. Checked in QEMU/OVMF only.
 - No driver for the RTL8125 yet (rumpnet only has wm), so no network.
 - USB keyboards need firmware PS/2 emulation; untested.
 - If NVMe and AHCI end up on one shared legacy IRQ line, rumpdisk can freeze (see PROJECT_STATUS.md).

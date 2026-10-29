@@ -109,7 +109,7 @@ package (0.9.git20261028-2) as a dependency, so the stall may come from that and
 | Root on NVMe, no BIOS disk | pass | /dev/ld0, ld0s1, ld0s2 storeio nodes; fstab uses /dev/ld0s2 (wd0s2 made fsck fail) |
 | Full system | pass | `FW=efi BUS=nvme NVME_ADDR=0x6 vm/run.sh 2`: ssh, 300 MB dd 377 MB/s, apt-get update, stress2 2/2 |
 
-Known: kernel console is still console=com0 (serial). The real machine needs a framebuffer console.
+Framebuffer console (patches/gnumach/fbcon): kd draws its 80x25 grid on the multiboot2 RGB framebuffer (24/32 bpp, 8x16 font). Verified in QEMU/OVMF by screenshot: boot messages, colours, wrapping, "console login:". Installed on the disk 2026-10-29 (ESP updated, files byte-identical, fsck.fat clean).
 
 ## Install (item 6), 2026-10-29: done
 See INSTALLATION.md. Verified: partition table, e2fsck -f clean after resize (it fixed leaked inodes left by Hurd ext2fs first), ESP files byte-identical to the build, root has fstab on ld2 and rumpnet. Not yet booted on the real machine.
