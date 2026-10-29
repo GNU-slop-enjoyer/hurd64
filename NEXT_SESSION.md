@@ -31,8 +31,13 @@ build VM (vm/build-vm.sh; build disk is now a 2nd NVMe ld1, IDE panicked in pcii
 repaired offline first (vm/fsck-layer.sh). After the build: dpkg -i the debs into prepared-install3,
 RELINK rumpdisk-nvme.static and rumpnet(.static) against them (static libs!), test with run-pc.sh.
 Fix order: a) ppb in rump pci (ppb-rump.diff: libpci SRCS += ppb.c, PCI.ioconf `ppb* at pci?` +
-`pci* at ppb? bus ?`), check IRQs behind bridges; b) quiet autoconf; c) USB keyboard (rump
-usb + ukbd/uhid -> Hurd console input); d) ext2fs fsck errors; e) SMP; f) iGPU; g) Wayland.
+`pci* at ppb? bus ?`), check IRQs behind bridges; b) quiet autoconf; c) USB keyboard. PLAN: rump component libukbd (uhidev.c ukbd.c + dev/hid parser; ioconf
+`uhidev* at uhub? port ? configuration ? interface ?`, `ukbd* at uhidev? reportid ?`, `wskbd* at ukbd? console ? mux ?`;
+xhci is already in libpci_usbhc, wskbd in libwscons). C daemon tuxkbd (in tuxhurd/utils): links rump +
+pci_usbhc + usb + ukbd + wscons like rumpdisk, rump_sys_open("/dev/wskbd0"), read wscons_event, US layout +
+shift/ctrl/caps -> bytes into a pty master whose slave runs /bin/login; pty output -> /dev/console (kdfb).
+Replace the console getty with it (inittab).
+NOTE: rumpusbdisk also wants xHCI; tuxkbd owns it, so USB storage is out for now; d) ext2fs fsck errors; e) SMP; f) iGPU; g) Wayland.
 
 ## Order (user, 2026-10-29)
 1 SMP hang, 2 >3.5 GB RAM, 3 NVMe, 4 RTL8125, 5 UEFI boot on the real PC, 6 install (wipes tuxmin, final OK first),
