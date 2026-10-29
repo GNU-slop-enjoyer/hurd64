@@ -8,7 +8,9 @@
  *
  *   tuxkbd [-c console] [-l login]
  *
- * Run as root, once, from inittab instead of the console getty.
+ * Keys typed on a PS/2 keyboard or a serial line reach the console itself and
+ * are passed on as well. Run as root, once, from inittab instead of the
+ * console getty.
  */
 #define _GNU_SOURCE
 #include <errno.h>
@@ -147,6 +149,25 @@ static void *keyboard(void *arg)
 	}
 }
 
+/* PS/2 or serial keys still arrive on the console itself: pass them on too */
+static void *console_keys(void *arg)
+{
+	int in = *(int *)arg;
+	char buf[64];
+
+	for (;;) {
+		ssize_t r = read(in, buf, sizeof buf);
+		if (r < 0 && errno == EINTR)
+			continue;
+		if (r <= 0) {
+			usleep(100000);
+			continue;
+		}
+		put(buf, r);
+	}
+	return NULL;
+}
+
 /* everything the terminal prints goes to the console */
 static void *screen(void *arg)
 {
@@ -208,10 +229,17 @@ int main(int argc, char **argv)
 		}
 	}
 
-	int out = open(console, O_WRONLY | O_NOCTTY);
+	int out = open(console, O_RDWR | O_NOCTTY);
 	if (out < 0) {
 		perror(console);
 		return 1;
+	}
+	/* the pty does echo and line editing; the console just passes bytes */
+	struct termios t;
+	if (tcgetattr(out, &t) == 0) {
+		cfmakeraw(&t);
+		t.c_oflag |= OPOST | ONLCR;
+		tcsetattr(out, TCSANOW, &t);
 	}
 	if ((master = posix_openpt(O_RDWR | O_NOCTTY)) < 0 || grantpt(master) || unlockpt(master)) {
 		perror("tuxkbd: pty");
@@ -223,9 +251,10 @@ int main(int argc, char **argv)
 		return 1;
 	}
 
-	pthread_t kt, st;
+	pthread_t kt, st, ct;
 	pthread_create(&kt, NULL, keyboard, NULL);
 	pthread_create(&st, NULL, screen, &out);
+	pthread_create(&ct, NULL, console_keys, &out);
 
 	/* keep a login on the console; start a new one when it exits */
 	for (;;) {
