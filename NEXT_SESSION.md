@@ -21,7 +21,9 @@
 then GPU on the Granite Ridge iGPU only, then Wayland.
 
 ## State 2026-10-29 evening: items 2, 3, 5, 6 done in QEMU and installed on the disk (UEFI, NVMe root ld2, framebuffer console). Open: item 1 (SMP hang), item 4 (RTL8125 rge component for rumpnet), real-hardware boot test (user), NVMe+AHCI shared-IRQ freeze, USB keyboard.
-Item 4 (rge) exact next steps (build started 2026-10-29 ~17:40 in the VM):
+Item 4 (rge): DONE as far as QEMU allows (built, linked, installed; see PROJECT_STATUS.md). Real test = boot
+  the machine and check `dmesg`-style console lines for "rge0 at pci" and DHCP on /dev/rge0.
+  Old steps, for reference:
   1. Build VM: `DISK=prepared-nvme.qcow2 ESPDIR=esp-fb FW=efi NVME_ADDR=0x6 BUS=nvme MEM=3G
      EXTRA="-drive file=build.img,format=raw,if=ide,index=2,cache=writeback" vm/run.sh 2`, then in the
      VM `settrans -ac /build /hurd/ext2fs /dev/wd1` (wd1 = label hurdbuild). Log: /build/rk-build.log
