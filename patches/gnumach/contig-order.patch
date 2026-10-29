@@ -1,0 +1,66 @@
+From ea888c37d09bee373643470b2fe157e97bb77bac Mon Sep 17 00:00:00 2001
+From: GNU-slop-enjoyer <johnepstein420@gmail.com>
+Date: Thu, 29 Oct 2026 22:58:35 +0100
+Subject: [PATCH] vm_allocate_contiguous: fail when the size is above the
+ biggest free block
+
+A request for more than 1 << (VM_PAGE_NR_FREE_LISTS - 1) pages (4 MiB)
+reached vm_page_alloc_pa and its assertion, so any privileged task could
+stop the kernel. Return KERN_RESOURCE_SHORTAGE instead.
+---
+ vm/vm_page.c | 5 +----
+ vm/vm_page.h | 6 ++++++
+ vm/vm_user.c | 4 ++++
+ 3 files changed, 11 insertions(+), 4 deletions(-)
+
+diff --git a/vm/vm_page.c b/vm/vm_page.c
+index 5d733120..d9378540 100644
+--- a/vm/vm_page.c
++++ b/vm/vm_page.c
+@@ -63,10 +63,7 @@
+ #define thread_pin()
+ #define thread_unpin()
+ 
+-/*
+- * Number of free block lists per segment.
+- */
+-#define VM_PAGE_NR_FREE_LISTS 11
++/* VM_PAGE_NR_FREE_LISTS (free block lists per segment) is in vm_page.h */
+ 
+ /*
+  * The size of a CPU pool is computed by dividing the number of pages in its
+diff --git a/vm/vm_page.h b/vm/vm_page.h
+index 6990f95e..90147aea 100644
+--- a/vm/vm_page.h
++++ b/vm/vm_page.h
+@@ -376,6 +376,12 @@ vm_page_type(const struct vm_page *page)
+ void vm_page_set_type(struct vm_page *page, unsigned int order,
+                       unsigned short type);
+ 
++/*
++ * Number of free block lists per segment: the largest physically
++ * contiguous block is 1 << (VM_PAGE_NR_FREE_LISTS - 1) pages.
++ */
++#define VM_PAGE_NR_FREE_LISTS 11
++
+ static inline unsigned int
+ vm_page_order(size_t size)
+ {
+diff --git a/vm/vm_user.c b/vm/vm_user.c
+index 94cfb891..e44ea332 100644
+--- a/vm/vm_user.c
++++ b/vm/vm_user.c
+@@ -637,6 +637,10 @@ kern_return_t vm_allocate_contiguous(
+ 	if (size == 0)
+ 		return KERN_INVALID_ARGUMENT;
+ 
++	/* larger than the biggest block the page allocator keeps */
++	if (vm_page_order(size) >= VM_PAGE_NR_FREE_LISTS)
++		return KERN_RESOURCE_SHORTAGE;
++
+ 	object = vm_object_allocate(size);
+ 
+ 	if (object == NULL)
+-- 
+2.55.0
+

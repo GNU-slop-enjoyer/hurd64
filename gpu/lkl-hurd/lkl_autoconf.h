@@ -1,0 +1,2 @@
+#define LKL_HOST_CONFIG_POSIX y
+#define LKL_HOST_CONFIG_MMU y

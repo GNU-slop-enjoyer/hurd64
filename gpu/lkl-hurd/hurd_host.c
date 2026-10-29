@@ -5,19 +5,20 @@
  * libpciaccess (config space, BARs) and GNU Mach (interrupts, physical
  * memory):
  *
- *  - kernel RAM is one physically contiguous wired block, so a DMA address
- *    is the block's physical start plus the offset into it. LKL maps that
- *    RAM where it wants it through the "mem" device.
+ *  - kernel RAM is a row of wired, physically contiguous 4 MiB chunks, so
+ *    a DMA address is a chunk's physical start plus the offset into it.
  *  - BARs are mapped straight into the address space; ioremap() of a BAR
  *    returns the mapping and readl()/writel() become plain loads/stores.
- *  - INTx arrives as a Mach message (device_intr_register); it is passed to
- *    LKL and the line stays masked until the device stops asserting it.
+ *  - INTx comes through libirqhelp (GSI from ACPI); it is passed to LKL and
+ *    the line stays masked until the device stops asserting it.
  *    GNU Mach has no MSI.
  *
  * The device is chosen with "lkl_pci=BUS:DEV.FN" (or DOMAIN:BUS:DEV.FN) on
  * the LKL command line.
  */
+#ifndef _GNU_SOURCE
 #define _GNU_SOURCE
+#endif
 #include <errno.h>
 #include <pthread.h>
 #include <stdint.h>
@@ -29,8 +30,8 @@
 #include <hurd.h>
 #include <mach.h>
 #include <mach/gnumach.h>
+#include <mach/mach4.h>
 #include <device/device.h>
-#include <device/intr.h>
 #include <pciaccess.h>
 
 #include <lkl_host.h>
@@ -40,14 +41,15 @@
 #define PCI_COMMAND_INTX_DISABLE 0x400
 #define PCI_STATUS		0x06
 #define PCI_STATUS_INTERRUPT	0x08
-#define PCI_INTERRUPT_LINE	0x3c
 
-static mach_port_t host_priv, master_device, mem_dev;
+static mach_port_t host_priv, master_device;
 
-/* kernel RAM: virtual start (where it was first allocated), physical start */
-static vm_address_t ram_va;
-static uint64_t ram_pa;
-static unsigned long ram_size;
+/* kernel RAM: 4 MiB physically contiguous chunks */
+#define CHUNK (4UL << 20)
+static struct { vm_address_t va; uint64_t pa; mach_port_t proxy; } *chunk;
+static unsigned long nchunks, ram_size;
+/* LKL_HURD_DEBUG=1: log interrupts and DMA mappings */
+static int debug;
 /* where LKL put it (shmem_mmap at offset 0) */
 static uintptr_t ram_lkl;
 
@@ -59,9 +61,7 @@ static int ndirect;
 struct lkl_pci_dev {
 	struct pci_device *pdev;
 	int irq;		/* LKL's number */
-	int line;		/* the hardware line */
-	mach_port_t port;
-	pthread_t thread;
+	struct irq *intr;	/* libirqhelp's */
 };
 
 static int privileged(void)
@@ -70,42 +70,40 @@ static int privileged(void)
 		return 0;
 	if (get_privileged_ports(&host_priv, &master_device))
 		return -1;
-	if (device_open(master_device, D_READ | D_WRITE, "mem", &mem_dev))
-		return -1;
 	return 0;
 }
 
-/* map physical memory at addr (fixed) or anywhere (addr == 0) */
-static void *map_phys(void *addr, uint64_t pa, size_t size, vm_prot_t prot)
-{
-	mach_port_t pager;
-	vm_address_t va = (vm_address_t)addr;
+/* LKL kernel RAM ("shared memory" in LKL's MMU mode).
 
-	if (device_map(mem_dev, prot, pa, size, &pager, 0))
-		return NULL;
-	kern_return_t kr = vm_map(mach_task_self(), &va, size, 0, addr == NULL,
-				  pager, 0, 0, prot, prot, VM_INHERIT_NONE);
-	mach_port_deallocate(mach_task_self(), pager);
-	return kr ? NULL : (void *)va;
-}
-
-/* LKL kernel RAM ("shared memory" in LKL's MMU mode) */
+   GNU Mach hands out at most 4 MiB of physically contiguous memory at a
+   time, and its "mem" device will not map RAM, so the RAM is a row of
+   4 MiB chunks. Each one is mapped wherever LKL asks through a proxy
+   memory object of its first mapping, so all mappings share the pages. */
 
 static void hurd_shmem_init(unsigned long size)
 {
-	rpc_phys_addr_t pa;
-
+	debug = getenv("LKL_HURD_DEBUG") != NULL;
 	if (privileged()) {
 		lkl_printf("lkl_hurd: no privileged ports (run as root)\n");
 		abort();
 	}
-	if (vm_allocate_contiguous(host_priv, mach_task_self(), &ram_va, &pa,
-				   size, 0, ~(rpc_phys_addr_t)0, 4096)) {
-		lkl_printf("lkl_hurd: cannot get %lu MiB of contiguous memory\n",
-			   size >> 20);
+	nchunks = (size + CHUNK - 1) / CHUNK;
+	chunk = calloc(nchunks, sizeof *chunk);
+	if (!chunk)
 		abort();
+	for (unsigned long i = 0; i < nchunks; i++) {
+		rpc_phys_addr_t pa;
+
+		if (vm_allocate_contiguous(host_priv, mach_task_self(), &chunk[i].va,
+					   &pa, CHUNK, 0, ~(rpc_phys_addr_t)0, 4096)
+		    || vm_region_create_proxy(mach_task_self(), chunk[i].va,
+					      VM_PROT_ALL, CHUNK, &chunk[i].proxy)) {
+			lkl_printf("lkl_hurd: cannot get chunk %lu of %lu MiB contiguous memory\n",
+				   i, size >> 20);
+			abort();
+		}
+		chunk[i].pa = pa;
 	}
-	ram_pa = pa;
 	ram_size = size;
 }
 
@@ -113,6 +111,7 @@ static void *hurd_shmem_mmap(void *addr, unsigned long pg_off, unsigned long siz
 		      enum lkl_prot prot)
 {
 	vm_prot_t p = 0;
+	vm_address_t base = (vm_address_t)addr;
 
 	if (pg_off + size > ram_size)
 		return NULL;
@@ -122,10 +121,29 @@ static void *hurd_shmem_mmap(void *addr, unsigned long pg_off, unsigned long siz
 		p |= VM_PROT_WRITE;
 	if (prot & LKL_PROT_EXEC)
 		p |= VM_PROT_EXECUTE;
-	void *r = map_phys(addr, ram_pa + pg_off, size, p);
-	if (r && pg_off == 0 && !ram_lkl)
-		ram_lkl = (uintptr_t)r;
-	return r;
+	/* anywhere: find room for the whole range first */
+	if (!base) {
+		if (vm_allocate(mach_task_self(), &base, size, TRUE))
+			return NULL;
+		vm_deallocate(mach_task_self(), base, size);
+	}
+	for (unsigned long done = 0; done < size;) {
+		unsigned long off = pg_off + done, n = CHUNK - off % CHUNK;
+		vm_address_t va = base + done;
+
+		if (n > size - done)
+			n = size - done;
+		if (vm_map(mach_task_self(), &va, n, 0, FALSE, chunk[off / CHUNK].proxy,
+			   off % CHUNK, FALSE, p, VM_PROT_ALL, VM_INHERIT_NONE)) {
+			if (done)
+				vm_deallocate(mach_task_self(), base, done);
+			return NULL;
+		}
+		done += n;
+	}
+	if (pg_off == 0 && !ram_lkl)
+		ram_lkl = base;
+	return (void *)base;
 }
 
 /* I/O memory */
@@ -202,9 +220,8 @@ static struct lkl_pci_dev *hurd_pci_add(const char *name, void *kernel_ram,
 	if (!d)
 		return NULL;
 	d->pdev = pdev;
-	d->port = MACH_PORT_NULL;
-	lkl_printf("lkl_hurd: %s is %04x:%04x, kernel RAM at physical 0x%llx\n",
-		   name, pdev->vendor_id, pdev->device_id, (unsigned long long)ram_pa);
+	lkl_printf("lkl_hurd: %s is %04x:%04x\n",
+		   name, pdev->vendor_id, pdev->device_id);
 	return d;
 }
 
@@ -250,16 +267,22 @@ static void *hurd_resource_alloc(struct lkl_pci_dev *d, unsigned long size,
 static unsigned long long hurd_map_page(struct lkl_pci_dev *d, void *vaddr,
 					unsigned long size)
 {
-	uintptr_t v = (uintptr_t)vaddr;
+	uintptr_t v = (uintptr_t)vaddr, off = v - ram_lkl;
 
-	if (ram_lkl && v >= ram_lkl && v - ram_lkl + size <= ram_size)
-		return ram_pa + (v - ram_lkl);
-	if (v >= ram_va && v - ram_va + size <= ram_size)
-		return ram_pa + (v - ram_va);
-	lkl_printf("lkl_hurd: DMA from %p is outside kernel RAM\n", vaddr);
-	return 0;
+	if (!ram_lkl || v < ram_lkl || off + size > ram_size) {
+		lkl_printf("lkl_hurd: DMA from %p is outside kernel RAM\n", vaddr);
+		return 0;
+	}
+	/* Linux's page allocator hands out naturally aligned blocks of at most
+	   4 MiB, so a block never crosses into the next chunk */
+	if (size && off / CHUNK != (off + size - 1) / CHUNK)
+		lkl_printf("lkl_hurd: DMA block %p+%lu crosses a 4 MiB chunk\n",
+			   vaddr, size);
+	if (debug)
+		lkl_printf("lkl_hurd: dma %p+%lu -> 0x%llx\n", vaddr, size,
+			   (unsigned long long)(chunk[off / CHUNK].pa + off % CHUNK));
+	return chunk[off / CHUNK].pa + off % CHUNK;
 }
-
 static void hurd_unmap_page(struct lkl_pci_dev *d, unsigned long long dma,
 			    unsigned long size)
 {
@@ -273,55 +296,49 @@ static int intx_pending(struct lkl_pci_dev *d)
 	return status & PCI_STATUS_INTERRUPT;
 }
 
-static int intr_server(mach_msg_header_t *in, mach_msg_header_t *out);
-static struct lkl_pci_dev *the_dev;	/* LKL's PCI root bus holds one device */
+/* libirqhelp (the Hurd's interrupt helper; it ships no header) */
+struct irq;
+extern int irqhelp_init(void);
+extern struct irq *irqhelp_install_interrupt_handler(int gsi, int bus, int dev,
+		int fun, void (*handler)(void *), void *context);
+extern void *irqhelp_server_loop(void *arg);
+extern void irqhelp_enable_irq(struct irq *irq);
 
-static void *intr_thread(void *arg)
+/* Runs on libirqhelp's thread; the line stays masked until this returns,
+   and the line may be shared (in QEMU with the root disk), so be quick. */
+static void intx_handler(void *arg)
 {
 	struct lkl_pci_dev *d = arg;
+	const struct timespec us50 = { 0, 50 * 1000 };
 
-	/* this thread only waits; LKL runs the handler on its own threads */
-	mach_msg_server(intr_server, 0, d->port);
-	return NULL;
-}
-
-static int intr_server(mach_msg_header_t *in, mach_msg_header_t *out)
-{
-	mach_intr_notification_t *n = (mach_intr_notification_t *)in;
-	struct lkl_pci_dev *d = the_dev;
-	const struct timespec ms = { 0, 1000 * 1000 };
-
-	((mig_reply_header_t *)out)->RetCode = MIG_NO_REPLY;
-	if (in->msgh_id != MACH_INTR_NOTIFY || n->line != d->line)
-		return 0;
-	/* level triggered: keep handing it to Linux until the device lets go
-	   of the line, then unmask it */
-	do {
-		lkl_trigger_irq(d->irq);
-		nanosleep(&ms, NULL);
-	} while (intx_pending(d));
-	device_intr_enable(master_device, d->line, TRUE);
-	return 1;
+	if (debug)
+		lkl_printf("lkl_hurd: interrupt, device %s\n",
+			   intx_pending(d) ? "asserting" : "quiet");
+	if (!intx_pending(d))
+		return;		/* another device on the line */
+	/* runs the Linux handler now, or marks it pending if Linux is busy */
+	lkl_trigger_irq(d->irq);
+	/* a pending handler runs as soon as Linux is free: wait a moment so
+	   the line is not unmasked while the device still asserts it */
+	for (int i = 0; i < 20 && intx_pending(d); i++)
+		nanosleep(&us50, NULL);
 }
 
 static int hurd_irq_init(struct lkl_pci_dev *d, int irq)
 {
-	uint8_t line = 0xff;
 	uint16_t cmd;
+	pthread_t t;
 
-	hurd_pci_read(d, PCI_INTERRUPT_LINE, 1, &line);
-	if (line == 0 || line == 0xff) {
-		lkl_printf("lkl_hurd: device has no interrupt line\n");
+	d->irq = irq;
+	if (irqhelp_init()) {
+		lkl_printf("lkl_hurd: irqhelp_init failed\n");
 		return -1;
 	}
-	d->irq = irq;
-	d->line = line;
-	the_dev = d;
-	if (mach_port_allocate(mach_task_self(), MACH_PORT_RIGHT_RECEIVE, &d->port))
-		return -1;
-	if (device_intr_register(master_device, line, 0, 0x04000000, d->port,
-				 MACH_MSG_TYPE_MAKE_SEND)) {
-		lkl_printf("lkl_hurd: cannot register irq %d\n", line);
+	/* the GSI comes from ACPI's routing for this bus/dev/fn */
+	d->intr = irqhelp_install_interrupt_handler(-1, d->pdev->bus, d->pdev->dev,
+						    d->pdev->func, intx_handler, d);
+	if (!d->intr) {
+		lkl_printf("lkl_hurd: no interrupt for the device\n");
 		return -1;
 	}
 	/* make sure INTx is not disabled at the device */
@@ -330,10 +347,11 @@ static int hurd_irq_init(struct lkl_pci_dev *d, int irq)
 		cmd &= ~PCI_COMMAND_INTX_DISABLE;
 		hurd_pci_write(d, PCI_COMMAND, 2, &cmd);
 	}
-	if (pthread_create(&d->thread, NULL, intr_thread, d))
+	if (pthread_create(&t, NULL, irqhelp_server_loop, d->intr))
 		return -1;
-	device_intr_enable(master_device, line, TRUE);
-	lkl_printf("lkl_hurd: irq %d -> LKL irq %d\n", line, irq);
+	pthread_detach(t);
+	irqhelp_enable_irq(d->intr);
+	lkl_printf("lkl_hurd: INTx -> LKL irq %d\n", irq);
 	return 0;
 }
 

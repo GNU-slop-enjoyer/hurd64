@@ -5,10 +5,13 @@
 (copies in vm/). Stop a VM with `vm/stop.sh` (uses qemu.pid). Never `pkill -f` a pattern.
 
 ## GPU port (started 2026-10-29): see gpu/README.md
-amdgpu via LKL (Linux 6.12 as a library) in a Hurd server. Written, not built: LKL FPU patch + config,
-gpu/lkl-hurd/hurd_host.c (PCI/INTx/DMA/timers for the Hurd), gpu/build-lkl.sh. Building the cloned
-LKL tree was refused by the permission check; the user has to allow it (or run gpu/build-lkl.sh).
-Testing needs the iGPU 13:00.0 (no monitor, IOMMU group 31) moved from amdgpu to vfio-pci on the host.
+amdgpu via LKL (Linux 6.12 as a library) in a Hurd server. DONE: LKL+amdgpu builds on the host (gpu/build-lkl.sh),
+runs inside a Hurd process (lkl-hurd/, test/lkl-boot.c), and the Hurd PCI host code is verified end to end with
+vm/build-vm-vt.sh: Linux virtio-blk in LKL read the partition table of a QEMU virtio disk (BAR MMIO, DMA via 4 MiB
+chunks, INTx via libirqhelp). virtio needs iommu_platform=on (else it bypasses the DMA API and scribbles over RAM).
+NEXT: user runs `sudo gpu/igpu-vfio.sh` + reboots -> iGPU 13:00.0 on vfio-pci, VFCT copied; rerun gpu/build-lkl.sh
+(builds the VBIOS in), then vm/build-vm-gpu.sh and `./lkl-boot 1024 lkl_pci=00:0b.0` in /build/lkl/lkl-hurd.
+PUSH BLOCKED: commit c1bd9c4 contains a 317 MB binary (gpu/test/lkl-boot); removing it needs a history rewrite.
 
 ## Where things are (updated 2026-10-29)
 - Upstream checkouts: ~/src/hurd64/upstream/{gnumach,mig,hurd}. Tools: ~/src/hurd64/tools (x86_64-gnu-mig).

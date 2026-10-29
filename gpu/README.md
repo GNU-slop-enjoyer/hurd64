@@ -25,10 +25,10 @@ it can't be tested.
 
 ## Steps
 
-1. Build LKL with amdgpu on the Linux host (`build-lkl.sh`). **Not run yet.**
-2. Test it there first: LKL's own VFIO host on the iGPU (it has nothing
-   plugged in and its own IOMMU group, 31). Needs amdgpu unbound from
-   13:00.0 on the host and bound to vfio-pci.
+1. Build LKL with amdgpu on the Linux host (`build-lkl.sh`). Done; it also runs on the Hurd, and the
+   PCI host code passed a virtio-blk test in QEMU (`vm/build-vm-vt.sh`).
+2. Give the iGPU to vfio-pci at boot: `sudo gpu/igpu-vfio.sh`, reboot (also copies the VFCT table
+   with the VBIOS, which `build-lkl.sh` then builds in; `vfct-extract.c`).
 3. Build the host library on the Hurd, run the same test in the PC-shaped VM
    with the iGPU passed through (VFIO).
 4. Expected trouble: the VBIOS (no ACPI/VFCT inside LKL; read it from VRAM or
