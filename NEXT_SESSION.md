@@ -21,10 +21,15 @@
 then GPU on the Granite Ridge iGPU only, then Wayland.
 
 ## Current item: 3 (NVMe), then 4-6. Item 1 (SMP hang) is parked; item 2 is done for AHCI/NVMe.
-Item 3 next: find out why boot stalls at DHCP with root on NVMe.
-  a. Same layer, root on AHCI (entry tux-up, wd0): does it also stall? If yes it's the new hurd
-     package, not NVMe. (prepared-nvme.qcow2 has next_entry=tux-up-nvme one-shot in grubenv;
-     each fresh work.qcow2 inherits it.)
+Item 3 next: the stall after `entropy: best effort` in rumpdisk's rump kernel with NVMe loaded.
+  a. Done: AHCI root on the same layer boots, so the hurd package isn't it. A shared IRQ
+     with the NIC isn't the whole cause (see PROJECT_STATUS.md).
+  a2. Read NetBSD sys/kern/kern_entropy.c (rumpkernel tree) for what prints "best effort" and
+     what can block after it; check whether nvme(4) or ld(4) attach adds an entropy source that
+     waits for a callout/softint which the Hurd rumpuser never runs.
+  NOTE: booting prepared-nvme.qcow2 directly uses up its one-shot next_entry. Re-arm with
+  `grub-reboot tux-up-nvme` from an AHCI boot of it. NVME_ADDR=0x6 puts NVMe on IRQ 10;
+  give AHCI addr=0x5 to keep it on IRQ 10 too.
   b. Boot NVMe root with networking off (rename /etc/network/interfaces) to see if the rest boots.
   c. kdb is unreachable there (console=com0 masks the kbd pin); use `console=com0` off or `-s`
      single-user for the next try.

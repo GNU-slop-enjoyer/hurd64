@@ -6,7 +6,7 @@ cd "$(dirname "$0")"
 # BUS=ahci puts the disk on an AHCI (SATA) controller, BUS=nvme on an NVMe controller, instead of IDE
 D="${DISK:-work.qcow2}"
 if [ "$BUS" = nvme ]; then
-  DRIVE="-drive id=d0,if=none,file=$D,format=qcow2,cache=writeback -device nvme,serial=tuxnvme0,drive=d0"
+  DRIVE="-drive id=d0,if=none,file=$D,format=qcow2,cache=writeback -device nvme,serial=tuxnvme0,drive=d0${NVME_ADDR:+,addr=$NVME_ADDR}"
 elif [ "$BUS" = ahci ]; then
   DRIVE="-device ahci,id=ahci -drive id=d0,if=none,file=$D,format=qcow2,cache=writeback -device ide-hd,drive=d0,bus=ahci.0"
 else

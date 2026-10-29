@@ -77,6 +77,14 @@ Groq configured, tested 2026-10-29 (openai/gpt-oss-120b answered OK). See docs/A
 | NVMe attach + root mount | **pass** | QEMU nvme device: `nvme0: NVMe 1.4`, `ld0 at nvme0 nsid 1`, `ext2fs[part:2:device:ld0]` bootstrapped |
 | Full boot with root on NVMe | **FAIL** (stall) | stops at "Configuring network interfaces" (dhclient); serial and disk stop changing 11 s after start; CPU halted with IF=1 |
 
+Stall narrowed down (2026-10-29):
+- Same layer and new hurd package, root on AHCI (IRQ 10, e1000 on IRQ 11): boots to login.
+  So the stall needs the NVMe driver; the hurd package alone is not the cause.
+- NVMe sharing IRQ 11 with e1000: stall. NVMe and AHCI on IRQ 10, e1000 alone on 11: still a
+  stall, so a shared line between rumpdisk and netdde is not the (whole) cause.
+- Last console line before every stall: `[6.09] entropy: best effort` from the rump kernel in
+  rumpdisk. Serial, disk image and the IRQ 10 count all stop right after it.
+
 Test setup: SeaBIOS cannot boot NVMe, so GRUB boots from an AHCI copy (bootstub.qcow2) and the
 root is the NVMe disk. The build layer prepared-nvme.qcow2 also got Debian's newer `hurd`
 package (0.9.git20261028-2) as a dependency, so the stall may come from that and not from NVMe.
