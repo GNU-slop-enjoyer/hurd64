@@ -1,0 +1,56 @@
+From d7a1eadee2baa6c25e4848106414b7fd26341f83 Mon Sep 17 00:00:00 2001
+From: GNU-slop-enjoyer <johnepstein420@gmail.com>
+Date: Thu, 29 Oct 2026 13:26:59 +0100
+Subject: [PATCH] rumpdisk: drive NVMe disks through NetBSD's nvme and ld_nvme
+
+NVMe namespaces attach as ld(4) disks, so accept ld names next to wd
+and cd, and link the rumpdev_ld, rumpdev_nvme and rumpdev_ld_nvme
+components (Debian rumpkernel 0~20250111-10 and later).
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ rumpdisk/Makefile     | 2 +-
+ rumpdisk/block-rump.c | 7 ++++++-
+ 2 files changed, 7 insertions(+), 2 deletions(-)
+
+diff --git a/rumpdisk/Makefile b/rumpdisk/Makefile
+index de33c65d..fdc6ea25 100644
+--- a/rumpdisk/Makefile
++++ b/rumpdisk/Makefile
+@@ -16,7 +16,7 @@
+ #   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ 
+ RUMPLIBS=rump rumpuser rumpdev rumpdev_disk rumpdev_pci rumpvfs
+-RUMPSATA=rumpdev_ahcisata rumpdev_piixide rumpdev_ata
++RUMPSATA=rumpdev_ahcisata rumpdev_piixide rumpdev_ata rumpdev_ld rumpdev_nvme rumpdev_ld_nvme
+ RUMPUSB=rumpdev_usb rumpdev_pci_usbhc rumpdev_umass rumpdev_scsipi
+ RUMPEXTRA=rumpdev_scsipi
+ 
+diff --git a/rumpdisk/block-rump.c b/rumpdisk/block-rump.c
+index aa4a387f..b8ff54ff 100644
+--- a/rumpdisk/block-rump.c
++++ b/rumpdisk/block-rump.c
+@@ -47,7 +47,11 @@
+ #define BLKRRPART  0x125F     /* re-read partition table */
+ 
+ #define DISK_NAME_LEN 32
+-#define MAX_DISK_DEV 2
++#ifdef _RUMP_SATA
++#define MAX_DISK_DEV 3		/* wd, ld, cd */
++#else
++#define MAX_DISK_DEV 2		/* sd, cd */
++#endif
+ 
+ #ifdef _RUMP_SATA
+ #define RUMP_TYPE_STRING "rump SATA/IDE"
+@@ -125,6 +129,7 @@ is_disk_device (const char *name)
+   const char *allowed_devs[MAX_DISK_DEV] = {
+ #ifdef _RUMP_SATA
+     "wd",
++    "ld",			/* NVMe namespaces, via ld_nvme */
+ #else
+     "sd",
+ #endif
+-- 
+2.55.0
+

@@ -20,6 +20,23 @@
 1 SMP hang, 2 >3.5 GB RAM, 3 NVMe, 4 RTL8125, 5 UEFI boot on the real PC, 6 install (wipes tuxmin, final OK first),
 then GPU on the Granite Ridge iGPU only, then Wayland.
 
+## Current item: 3 (NVMe), then 4-6. Item 1 (SMP hang) is parked; item 2 is done for AHCI/NVMe.
+Item 3 next: find out why boot stalls at DHCP with root on NVMe.
+  a. Same layer, root on AHCI (entry tux-up, wd0): does it also stall? If yes it's the new hurd
+     package, not NVMe. (prepared-nvme.qcow2 has next_entry=tux-up-nvme one-shot in grubenv;
+     each fresh work.qcow2 inherits it.)
+  b. Boot NVMe root with networking off (rename /etc/network/interfaces) to see if the rest boots.
+  c. kdb is unreachable there (console=com0 masks the kbd pin); use `console=com0` off or `-s`
+     single-user for the next try.
+  NVMe test command (vm/): BUS=nvme MEM=4G with
+  EXTRA="-device ahci,id=ahci -drive id=b0,if=none,file=bootstub.qcow2,format=qcow2,cache=writeback -device ide-hd,drive=b0,bus=ahci.0,bootindex=0"
+  on fresh work.qcow2 + bootstub.qcow2 overlays of prepared-nvme.qcow2.
+Item 4 (RTL8125): NetBSD if_rge.c is in the rumpkernel tree (buildrump.sh/src/sys/dev/pci/if_rge.c);
+  needs a new rump component libpci_if_rge modeled on libpci_if_wm, then rumpnet linking it.
+Item 5 (UEFI): GNU Mach has multiboot2 + EFI system table work upstream (Sept/Oct 2026 commits);
+  next is GRUB EFI + multiboot2 on OVMF in QEMU.
+Item 6: install wipes tuxmin; show the plan and get the user's OK first.
+
 ## Next commands
 0. SMP hang (PROJECT_STATUS.md "The hang, as seen in kdb (corrected)"). Find which userspace
    locks the ext2fs/netdde threads wait on and who should wake them:
