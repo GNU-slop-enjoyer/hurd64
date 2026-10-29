@@ -114,16 +114,10 @@ static void *keyboard(void *arg)
 	(void)arg;
 	int fd = -1;
 
-	/* the keyboard may attach a moment after the USB bus is up */
-	for (int i = 0; i < 100 && fd < 0; i++) {
-		fd = rump_sys_open("/dev/wskbd", RUMP_O_RDONLY);
-		if (fd < 0)
-			usleep(100000);
-	}
-	if (fd < 0) {
-		dprintf(2, "tuxkbd: no USB keyboard (/dev/wskbd: %d)\n", errno);
-		return NULL;
-	}
+	/* USB discovery runs in the background and keyboards can be plugged in
+	   later: keep trying until one shows up */
+	for (int tries = 0; (fd = rump_sys_open("/dev/wskbd", RUMP_O_RDONLY)) < 0; tries++)
+		sleep(tries < 30 ? 1 : 5);
 
 	int shift = 0, ctrl = 0, alt = 0, caps = 0;
 	struct wscons_event ev[16];
