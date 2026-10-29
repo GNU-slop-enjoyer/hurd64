@@ -4,6 +4,12 @@
 "continue" is enough. Read PROJECT_STATUS.md first, then this list. VM scripts: ~/src/hurd64/vm
 (copies in vm/). Stop a VM with `vm/stop.sh` (uses qemu.pid). Never `pkill -f` a pattern.
 
+## GPU port (started 2026-10-29): see gpu/README.md
+amdgpu via LKL (Linux 6.12 as a library) in a Hurd server. Written, not built: LKL FPU patch + config,
+gpu/lkl-hurd/hurd_host.c (PCI/INTx/DMA/timers for the Hurd), gpu/build-lkl.sh. Building the cloned
+LKL tree was refused by the permission check; the user has to allow it (or run gpu/build-lkl.sh).
+Testing needs the iGPU 13:00.0 (no monitor, IOMMU group 31) moved from amdgpu to vfio-pci on the host.
+
 ## Where things are (updated 2026-10-29)
 - Upstream checkouts: ~/src/hurd64/upstream/{gnumach,mig,hurd}. Tools: ~/src/hurd64/tools (x86_64-gnu-mig).
 - Kernel: ~/src/hurd64/build/gnumach-smp/gnumach.gz (SMP, ncpus 64, kdb).
