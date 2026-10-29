@@ -24,7 +24,8 @@ Target machine: Ryzen 9 9950X (16c/32t), 30 GB RAM, UEFI only. Target disk: Neta
 | Parallel fs load, stock UP kernel | pass 3/3 | `vm/stress.sh`: 16x `ls -lR /usr/share`, 9-13 s |
 | Parallel fs load, SMP kernel, APs parked | pass 3/3 | 10-15 s |
 | Parallel fs load, SMP kernel, APs active | **FAIL** (hang), 2 and 8 CPUs | all CPUs idle; ext2fs threads asleep in `gsync_wait`, rumpdisk idle in `mach_msg`. See docs/TESTING.md |
-| Boot with >3.5 GB RAM | **FAIL** | `ext2fs: part:2:device:wd0: Input/output error` at 4 GB, fine at 2 GB. Blocks the real machine (30 GB) |
+| Boot with >3.5 GB RAM, IDE disk | FAIL (IDE only) | `ext2fs: ... Input/output error` at 4 GB: rump's PCI DMA memory lands above 4 GB and IDE DMA is 32-bit |
+| Boot with 4/8/16 GB RAM, AHCI disk | **pass** | `BUS=ahci MEM=16G vm/boot.sh up 2`: 15950 MB seen, 200 MB dd write, stress2 2/2 (18-26 s). Real machine uses NVMe/AHCI (64-bit DMA), so item 2 does not block it |
 
 ## Hang isolation (2026-10-29), `vm/stress2.sh` (8x ls -lR + 4x cp -a /usr/share/doc + rm + sync)
 
