@@ -1,0 +1,55 @@
+Description: rump component for NetBSD's rge(4), Realtek RTL8125 2.5GbE
+Author: tuxhurd
+
+diff -Nru a/buildrump.sh/src/sys/rump/dev/lib/libpci_if_rge/Makefile b/buildrump.sh/src/sys/rump/dev/lib/libpci_if_rge/Makefile
+--- a/buildrump.sh/src/sys/rump/dev/lib/libpci_if_rge/Makefile	1970-01-01 01:00:00.000000000 +0100
++++ b/buildrump.sh/src/sys/rump/dev/lib/libpci_if_rge/Makefile	2026-10-29 16:46:05.468977163 +0100
+@@ -0,0 +1,20 @@
++#	Realtek RTL8125 2.5GbE, modelled on libpci_if_wm
++#
++
++RUMPTOP=${TOPRUMP}
++
++.PATH:	${RUMPTOP}/../dev/pci
++
++LIB=	rumpdev_pci_if_rge
++COMMENT=Realtek RTL8125 2.5GbE device driver
++
++IOCONF=	PCI_IF_RGE.ioconf
++RUMP_COMPONENT=ioconf
++
++SRCS+=	if_rge.c
++
++CPPFLAGS+= -I${RUMPTOP}/librump/rumpkern
++
++.include "${RUMPTOP}/Makefile.rump"
++.include <bsd.lib.mk>
++.include <bsd.klinks.mk>
+diff -Nru a/buildrump.sh/src/sys/rump/dev/lib/libpci_if_rge/PCI_IF_RGE.ioconf b/buildrump.sh/src/sys/rump/dev/lib/libpci_if_rge/PCI_IF_RGE.ioconf
+--- a/buildrump.sh/src/sys/rump/dev/lib/libpci_if_rge/PCI_IF_RGE.ioconf	1970-01-01 01:00:00.000000000 +0100
++++ b/buildrump.sh/src/sys/rump/dev/lib/libpci_if_rge/PCI_IF_RGE.ioconf	2026-10-29 16:46:05.469272427 +0100
+@@ -0,0 +1,13 @@
++#
++# Realtek RTL8125 (rge)
++#
++
++ioconf pci_if_rge
++
++include "conf/files"
++include "dev/pci/files.pci"
++include "rump/dev/files.rump"
++
++pseudo-root pci*
++
++rge*	at pci? dev ? function ?	# Realtek RTL8125 2.5GbE
+--- a/buildrump.sh/src/sys/rump/dev/Makefile.rumpdevcomp	2026-10-29 16:03:10.000000000 +0000
++++ b/buildrump.sh/src/sys/rump/dev/Makefile.rumpdevcomp	2026-10-29 16:03:10.000000000 +0000
+@@ -8,7 +8,7 @@
+ 
+ RUMPUSBDEVS=	ualea ubt ucom ugenhc ulpt umass usb
+ 
+-RUMPPCIDEVS=	pci pci_if_iwn pci_if_pcn pci_if_wm
++RUMPPCIDEVS=	pci pci_if_iwn pci_if_pcn pci_if_wm pci_if_rge
+ RUMPPCIDEVS+=	pci_ahcisata
+ RUMPPCIDEVS+=	pci_piixide
+ RUMPPCIDEVS+=	pci_usbhc

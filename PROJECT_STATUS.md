@@ -114,5 +114,12 @@ Framebuffer console (patches/gnumach/fbcon): kd draws its 80x25 grid on the mult
 ## Install (item 6), 2026-10-29: done
 See INSTALLATION.md. Verified: partition table, e2fsck -f clean after resize (it fixed leaked inodes left by Hurd ext2fs first), ESP files byte-identical to the build, root has fstab on ld2 and rumpnet. Not yet booted on the real machine.
 
+## RTL8125 (item 4), in progress 2026-10-29
+- patches/rumpkernel/rge-rump.diff: rump component libpci_if_rge (NetBSD if_rge.c, no firmware), added
+  to RUMPPCIDEVS; Debian rumpkernel 0~20250111-10tux1. Package build running in the VM.
+- patches/hurd/rumpnet-rge: rumpnet links rumpdev_pci_if_rge.
+- QEMU cannot emulate an RTL8125, so only the build and loading can be tested here; the
+  real test is on the machine.
+
 ## Not started
 NVMe driver, RTL8125 driver, UEFI boot on the real machine, display/input, GPU, Wayland, install.
