@@ -1,0 +1,8 @@
+# Build inside the Hurd VM, against rumpkernel 0~20250111-10tux3 or later (ukbd + wscons components).
+#   make -f Makefile.tuxkbd
+# Components register themselves from constructors, so they must not be dropped as unneeded.
+RUMP = -lrumpdev_ukbd -lrumpdev_wscons -lrumpdev_usb -lrumpdev_pci_usbhc -lrumpdev_pci \
+       -lrumpdev -lrumpvfs -lrump -lrumpuser
+
+tuxkbd: tuxkbd.c
+	$(CC) -O2 -Wall -o $@ $< -Wl,--no-as-needed $(RUMP) -Wl,--as-needed -lpthread

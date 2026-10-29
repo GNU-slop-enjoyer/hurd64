@@ -1,0 +1,71 @@
+Description: rump component for USB keyboards (uhidev, ukbd)
+ wskbd attaches from libwscons; lets a rump client read keys from /dev/wskbd0.
+Author: tuxhurd
+
+diff -Nru a/buildrump.sh/src/sys/rump/dev/lib/libukbd/Makefile b/buildrump.sh/src/sys/rump/dev/lib/libukbd/Makefile
+--- a/buildrump.sh/src/sys/rump/dev/lib/libukbd/Makefile	1970-01-01 01:00:00.000000000 +0100
++++ b/buildrump.sh/src/sys/rump/dev/lib/libukbd/Makefile	2026-10-29 19:53:10.944298275 +0100
+@@ -0,0 +1,14 @@
++#	USB keyboards (uhidev + ukbd), modelled on libumass. wskbd comes from libwscons.
++#
++
++.PATH:	${.CURDIR}/../../../../dev/usb ${.CURDIR}/../../../../dev/hid
++
++LIB=	rumpdev_ukbd
++COMMENT=USB keyboard driver
++
++IOCONF=	UKBD.ioconf
++SRCS=	uhidev.c ukbd.c hid.c hidkbdmap.c
++SRCS+=	ukbd_component.c
++
++.include <bsd.lib.mk>
++.include <bsd.klinks.mk>
+diff -Nru a/buildrump.sh/src/sys/rump/dev/lib/libukbd/ukbd_component.c b/buildrump.sh/src/sys/rump/dev/lib/libukbd/ukbd_component.c
+--- a/buildrump.sh/src/sys/rump/dev/lib/libukbd/ukbd_component.c	1970-01-01 01:00:00.000000000 +0100
++++ b/buildrump.sh/src/sys/rump/dev/lib/libukbd/ukbd_component.c	2026-10-29 19:53:10.944906165 +0100
+@@ -0,0 +1,16 @@
++/* USB keyboard component: attaches uhidev and ukbd below the USB hubs. */
++
++#include <sys/param.h>
++#include <sys/conf.h>
++#include <sys/device.h>
++
++#include "ioconf.c"
++
++#include <rump-sys/kern.h>
++
++RUMP_COMPONENT(RUMP_COMPONENT_DEV)
++{
++
++	config_init_component(cfdriver_ioconf_ukbd,
++	    cfattach_ioconf_ukbd, cfdata_ioconf_ukbd);
++}
+diff -Nru a/buildrump.sh/src/sys/rump/dev/lib/libukbd/UKBD.ioconf b/buildrump.sh/src/sys/rump/dev/lib/libukbd/UKBD.ioconf
+--- a/buildrump.sh/src/sys/rump/dev/lib/libukbd/UKBD.ioconf	1970-01-01 01:00:00.000000000 +0100
++++ b/buildrump.sh/src/sys/rump/dev/lib/libukbd/UKBD.ioconf	2026-10-29 19:53:10.944614448 +0100
+@@ -0,0 +1,13 @@
++#
++# USB keyboards
++#
++
++ioconf ukbd
++
++include "conf/files"
++include "dev/usb/files.usb"
++
++pseudo-root uhub*
++
++uhidev*	at uhub? port ? configuration ? interface ?
++ukbd*	at uhidev? reportid ?
+diff -Nru a/buildrump.sh/src/sys/rump/dev/Makefile.rumpdevcomp b/buildrump.sh/src/sys/rump/dev/Makefile.rumpdevcomp
+--- a/buildrump.sh/src/sys/rump/dev/Makefile.rumpdevcomp	2026-10-29 19:53:10.941849133 +0100
++++ b/buildrump.sh/src/sys/rump/dev/Makefile.rumpdevcomp	2026-10-29 19:53:10.942830092 +0100
+@@ -5,7 +5,7 @@
+ 		pad pud	putter raidframe rnd scsipi sysmon vnd wscons	\
+ 		opencrypto
+ 
+-RUMPUSBDEVS=	ualea ubt ucom ugenhc ulpt umass usb
++RUMPUSBDEVS=	ualea ubt ucom ugenhc ukbd ulpt umass usb
+ 
+ RUMPPCIDEVS=	pci pci_if_iwn pci_if_pcn pci_if_wm
+ RUMPPCIDEVS+=	pci_usbhc
