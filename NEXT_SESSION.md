@@ -28,8 +28,11 @@ login with a working keyboard. Then continue through all items incl. iGPU + Wayl
 DONE 2026-10-30: USB KEYBOARD LOGIN WORKS on the PC-shaped VM (login root, run commands). tuxkbd from inittab
 (c:23 line), rump ukbd (rumpkernel -10tux3), /dev/wskbd had the wrong major so tuxkbd mknods /dev/tuxwskbd0
 from devsw_name2chr("wskbd"). ACPICA tracing off (hurd tux/quiet: acpi main.c). Log: /var/log/tuxkbd.log.
-Remaining for a clean console: motd UTF-8 art shows as garbage (8-bit kd), "Found ..." attach lines from
-tuxkbd's rump, "Found IRQ resource / Final irq" from libacpica glue.
+Console cleaned up (2026-10-30): rump AB_SILENT, ACPICA tracing off + libacpica stdout discarded, no per-IRQ
+printf in gnumach (patches/gnumach/quiet-intr), ASCII /etc/motd. vm/rebuild-all.sh rebuilds+installs all.
+Left on screen: Debian rcS "Cleaning up temporary files... failed!" + startpar bootclean failure.
+NEXT: ext2fs leaves fsck errors after clean poweroff (data safety), then SMP, iGPU, Wayland; reinstall disk
+only from the PC-VM-tested image (install/install.sh).
 Earlier: PC-shaped VM, vm/run-pc.sh: boots to "tuxhurd console login:" with root ld2 behind a PCIe
 root port, e1000e behind a root port with DHCP + ssh, no PS/2. Fixes: ppb-rump.diff (rumpkernel -10tux2,
 rumpdisk-nvme.static + rumpnet relinked), gnumach no-i8042 (kdinit + PS/2 mouse open). NEXT: USB keyboard

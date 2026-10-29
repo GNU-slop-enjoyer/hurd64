@@ -1,0 +1,44 @@
+From 4d47ae2a7cda2c7797a95ed63f4a8955af089cef Mon Sep 17 00:00:00 2001
+From: GNU-slop-enjoyer <johnepstein420@gmail.com>
+Date: Thu, 29 Oct 2026 20:58:36 +0100
+Subject: [PATCH 4/4] acpi: discard libacpica's stdout chatter after init
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ acpi/main.c | 13 +++++++++++++
+ 1 file changed, 13 insertions(+)
+
+diff --git a/acpi/main.c b/acpi/main.c
+index b91375ff..e40b5657 100644
+--- a/acpi/main.c
++++ b/acpi/main.c
+@@ -42,6 +42,16 @@
+ 
+ /* ACPICA debug output (method tracing on every IRQ query) */
+ extern uint32_t acpi_dbg_level, acpi_dbg_layer;
++
++/* libacpica's glue prints IRQ routing details on stdout for every query; errors
++   go to stderr.  There is no filesystem yet at this point, so discard in place.  */
++static ssize_t
++discard (void *cookie, const char *buf, size_t size)
++{
++  (void) cookie;
++  (void) buf;
++  return size;
++}
+ #include <acpifs.h>
+ 
+ /* Libnetfs stuff */
+@@ -211,6 +221,9 @@ main (int argc, char **argv)
+   /* quiet: ACPICA traces every method it evaluates when drivers ask for IRQs */
+   acpi_dbg_level = 0;
+   acpi_dbg_layer = 0;
++  FILE *null_out = fopencookie (NULL, "w", (cookie_io_functions_t) { .write = discard });
++  if (null_out)
++    stdout = null_out;
+ 
+   if (next_task != MACH_PORT_NULL)
+     machdev_trivfs_server_startup (bootstrap);
+-- 
+2.55.0
+

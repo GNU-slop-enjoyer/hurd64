@@ -1,7 +1,7 @@
 From 5f173285ef2fa6cf5d6cf2830b578a057f821ae8 Mon Sep 17 00:00:00 2001
 From: GNU-slop-enjoyer <johnepstein420@gmail.com>
 Date: Thu, 29 Oct 2026 20:14:18 +0100
-Subject: [PATCH] rumpdisk, rumpnet: boot the rump kernel quietly
+Subject: [PATCH 1/4] rumpdisk, rumpnet: boot the rump kernel quietly
 
 NetBSD's autoconf prints a line for every PCI device without a driver
 in that rump kernel, which floods the console at boot.

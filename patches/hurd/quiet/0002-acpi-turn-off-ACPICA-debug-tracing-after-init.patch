@@ -1,0 +1,39 @@
+From 24aba8b0fbf2a0226d146eccd5c0257e8311114e Mon Sep 17 00:00:00 2001
+From: GNU-slop-enjoyer <johnepstein420@gmail.com>
+Date: Thu, 29 Oct 2026 20:33:08 +0100
+Subject: [PATCH 2/4] acpi: turn off ACPICA debug tracing after init
+
+Every IRQ query from a driver printed a page of method traces.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ acpi/main.c | 6 ++++++
+ 1 file changed, 6 insertions(+)
+
+diff --git a/acpi/main.c b/acpi/main.c
+index a62c0700..b91375ff 100644
+--- a/acpi/main.c
++++ b/acpi/main.c
+@@ -39,6 +39,9 @@
+ #include <device/device.h>
+ #include <pthread.h>
+ #include <acpi/acpi_init.h>
++
++/* ACPICA debug output (method tracing on every IRQ query) */
++extern uint32_t acpi_dbg_level, acpi_dbg_layer;
+ #include <acpifs.h>
+ 
+ /* Libnetfs stuff */
+@@ -205,6 +208,9 @@ main (int argc, char **argv)
+ 
+   /* Enable ACPI mode of machine */
+   acpi_init ();
++  /* quiet: ACPICA traces every method it evaluates when drivers ask for IRQs */
++  acpi_dbg_level = 0;
++  acpi_dbg_layer = 0;
+ 
+   if (next_task != MACH_PORT_NULL)
+     machdev_trivfs_server_startup (bootstrap);
+-- 
+2.55.0
+

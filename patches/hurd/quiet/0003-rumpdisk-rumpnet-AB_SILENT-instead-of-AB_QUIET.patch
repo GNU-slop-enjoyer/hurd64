@@ -1,0 +1,42 @@
+From 8b1bdac39272466d916d1e5798097795ba80f8c0 Mon Sep 17 00:00:00 2001
+From: GNU-slop-enjoyer <johnepstein420@gmail.com>
+Date: Thu, 29 Oct 2026 20:58:19 +0100
+Subject: [PATCH 3/4] rumpdisk, rumpnet: AB_SILENT instead of AB_QUIET
+
+AB_QUIET still prints a short Found line per device.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ rumpdisk/block-rump.c | 2 +-
+ rumpnet/net-rump.c    | 2 +-
+ 2 files changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/rumpdisk/block-rump.c b/rumpdisk/block-rump.c
+index 255437d2..660c933b 100644
+--- a/rumpdisk/block-rump.c
++++ b/rumpdisk/block-rump.c
+@@ -224,7 +224,7 @@ rumpdisk_device_init (void)
+       mach_port_deallocate (mach_task_self (), device_master);
+     }
+ 
+-  rump_boot_sethowto (RUMP_AB_QUIET);
++  rump_boot_sethowto (RUMP_AB_SILENT);
+   rump_init ();
+ }
+ 
+diff --git a/rumpnet/net-rump.c b/rumpnet/net-rump.c
+index b28c475c..0a72d98d 100644
+--- a/rumpnet/net-rump.c
++++ b/rumpnet/net-rump.c
+@@ -899,7 +899,7 @@ device_set_filter (void *d, mach_port_t port, int priority,
+ 
+ static void rumpnet_init (void)
+ {
+-  rump_boot_sethowto (RUMP_AB_QUIET);
++  rump_boot_sethowto (RUMP_AB_SILENT);
+   rump_init();
+   socket_init();
+ }
+-- 
+2.55.0
+

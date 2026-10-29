@@ -1,0 +1,27 @@
+From a8a9115dee2978570c2b660d3ef1afe018f2f0da Mon Sep 17 00:00:00 2001
+From: GNU-slop-enjoyer <johnepstein420@gmail.com>
+Date: Thu, 29 Oct 2026 21:07:26 +0100
+Subject: [PATCH] intr: do not print every new user interrupt handler
+
+Each driver's IRQ registration put a line on the console.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ device/intr.c | 1 -
+ 1 file changed, 1 deletion(-)
+
+diff --git a/device/intr.c b/device/intr.c
+index ab27cba1..644ddcc4 100644
+--- a/device/intr.c
++++ b/device/intr.c
+@@ -191,7 +191,6 @@ insert_intr_entry (struct irqdev *dev, int id, ipc_port_t dst_port)
+       ret = NULL;
+       goto out;
+     }
+-  printf("irq handler [%d]: new delivery port %p entry %p for %s\n", id, dst_port, new, current_task()->name);
+   ret = new;
+   new->id = id;
+   new->dst_port = dst_port;
+-- 
+2.55.0
+
