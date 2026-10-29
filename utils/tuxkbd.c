@@ -52,6 +52,9 @@ static const char row_plain[] = "1234567890\r\x1b\x7f\t -=[]\\#;'`,./";
 static const char row_shift[] = "!@#$%^&*()\r\x1b\x7f\t _+{}|~:\"~<>?";
 
 static int master = -1;
+static FILE *logf;				/* /var/log/tuxkbd.log */
+
+#define LOG(...) do { if (logf) { fprintf(logf, __VA_ARGS__); fflush(logf); } } while (0)
 static const char *console = "/dev/console", *login_prog = "/bin/login";
 
 static void put(const char *s, size_t n)
@@ -116,13 +119,16 @@ static void *keyboard(void *arg)
 
 	/* USB discovery runs in the background and keyboards can be plugged in
 	   later: keep trying until one shows up */
+	LOG("waiting for a keyboard\n");
 	for (int tries = 0; (fd = rump_sys_open("/dev/wskbd", RUMP_O_RDONLY)) < 0; tries++)
 		sleep(tries < 30 ? 1 : 5);
+	LOG("keyboard open (fd %d)\n", fd);
 
 	int shift = 0, ctrl = 0, alt = 0, caps = 0;
 	struct wscons_event ev[16];
 	for (;;) {
 		ssize_t r = rump_sys_read(fd, ev, sizeof ev);
+		LOG("read %zd\n", r);
 		if (r <= 0) {
 			usleep(10000);
 			continue;
@@ -137,6 +143,7 @@ static void *keyboard(void *arg)
 			case K_LALT: case K_RALT: alt = down; continue;
 			case K_CAPS: if (down) caps = !caps; continue;
 			}
+			LOG("key %d %s\n", ev[i].value, down ? "down" : "up");
 			if (down)
 				key(ev[i].value, shift, ctrl, alt, caps);
 		}
@@ -240,6 +247,8 @@ int main(int argc, char **argv)
 		return 1;
 	}
 	rump_boot_sethowto(RUMP_AB_QUIET);
+	logf = fopen("/var/log/tuxkbd.log", "a");
+	LOG("tuxkbd starting\n");
 	if (rump_init() != 0) {
 		dprintf(out, "tuxkbd: rump_init failed\r\n");
 		return 1;
