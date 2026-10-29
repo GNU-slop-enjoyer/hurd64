@@ -3,6 +3,7 @@
  * purpose (commit aadb4339) and leaves enabling them to userspace.
  *
  *   smpctl          enable all processors, print how many are in use
+ *   smpctl -x CPU   enable all but CPU (left to a set made by cpuset)
  *   smpctl -s       only print the status
  *
  * Needs the privileged host port (run as root).
@@ -12,12 +13,14 @@
 #include <mach/mach_host.h>
 #include <mach_error.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
 
 int main(int argc, char **argv)
 {
     int status_only = argc > 1 && strcmp(argv[1], "-s") == 0;
+    int exclude = argc > 2 && strcmp(argv[1], "-x") == 0 ? atoi(argv[2]) : -1;
     mach_port_t host_priv, device;
     kern_return_t kr = get_privileged_ports(&host_priv, &device);
     if (kr) {
@@ -39,6 +42,8 @@ int main(int argc, char **argv)
     }
     int moved = 0, failed = 0;
     for (mach_msg_type_number_t i = 0; i < n && !status_only; i++) {
+        if ((int)i == exclude)
+            continue;
         kr = processor_assign(procs[i], pset, FALSE);
         if (kr == KERN_SUCCESS)
             moved++;

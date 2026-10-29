@@ -1,8 +1,12 @@
 #!/bin/sh
 # tux-smp: use every CPU, but keep the filesystem servers on one CPU of their own.
 #   ext2fs has a race that only shows when its threads really run in parallel
-#   (invalid-address write errors, then a hang), so all ext2fs tasks share a 1-CPU set.
-smpctl >/dev/null 2>&1 || exit 0
+#   (invalid-address write errors, then a hang). So first move all ext2fs tasks onto
+#   the last CPU in a set of their own, and only then let everything else use the rest.
+n=$(smpctl -s | awk '{print $1}')
+[ "${n:-1}" -gt 1 ] || exit 0
+last=$((n - 1))
 pids=$(ps -e -o pid= -o args= | awk '/ext2fs/ && !/awk/ {print $1}')
-[ -n "$pids" ] && cpuset $pids >/dev/null
+[ -n "$pids" ] && cpuset -c $last $pids >/dev/null
+smpctl -x $last >/dev/null 2>&1
 smpctl -s
