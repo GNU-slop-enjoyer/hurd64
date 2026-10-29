@@ -1,0 +1,45 @@
+From da9a65b89377f4599b1931fcf1f8945b1f38d6fd Mon Sep 17 00:00:00 2001
+From: GNU-slop-enjoyer <johnepstein420@gmail.com>
+Date: Thu, 29 Oct 2026 20:08:41 +0100
+Subject: [PATCH 2/2] kd_mouse: fail the PS/2 mouse open when there is no i8042
+
+ibm_ps2_mouse_open spins on the controller like kdinit did.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ i386/i386at/kd.c       | 2 +-
+ i386/i386at/kd_mouse.c | 5 +++++
+ 2 files changed, 6 insertions(+), 1 deletion(-)
+
+diff --git a/i386/i386at/kd.c b/i386/i386at/kd.c
+index d0f9f1aa..5a4b8d2b 100644
+--- a/i386/i386at/kd.c
++++ b/i386/i386at/kd.c
+@@ -188,7 +188,7 @@ u_char	kd_nextled	= 0;
+ boolean_t kd_initialized 	= FALSE;	/* driver initialized? */
+ /* No i8042 keyboard controller: some UEFI machines have none, and its status
+    port then reads all ones.  Everything that would wait on it is skipped.  */
+-static boolean_t kd_kbc_absent = FALSE;
++boolean_t kd_kbc_absent = FALSE;
+ boolean_t kd_extended	= FALSE;
+ 
+ /* Array for processing escape sequences. */
+diff --git a/i386/i386at/kd_mouse.c b/i386/i386at/kd_mouse.c
+index 9bd001cb..6c04cd82 100644
+--- a/i386/i386at/kd_mouse.c
++++ b/i386/i386at/kd_mouse.c
+@@ -149,6 +149,11 @@ int track_man[10];
+ int
+ mouseopen(dev_t dev, int flags, io_req_t ior)
+ {
++	extern boolean_t kd_kbc_absent;
++
++	/* the PS/2 mouse hangs off the i8042, which UEFI machines may not have */
++	if (kd_kbc_absent && ((minor(dev) & 0xf8) >> 3) == IBM_MOUSE)
++		return (D_NO_SUCH_DEVICE);
+ 	if (mouse_in_use)
+ 		return (D_ALREADY_OPEN);
+ 	mouse_in_use = TRUE;		/* locking? */
+-- 
+2.55.0
+

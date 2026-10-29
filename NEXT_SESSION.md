@@ -25,7 +25,11 @@ NVMe/NIC/xHCI sit behind PCIe bridges. (2) Hurd reads only the PS/2 keyboard. (3
 RULE NOW: test only on a QEMU machine shaped like the PC: `-machine q35,i8042=off`, devices behind
 pcie-root-port, xHCI + usb-kbd only, UEFI. The user does not want to boot again until it is a usable
 login with a working keyboard. Then continue through all items incl. iGPU + Wayland.
-Progress 2026-10-30: PC-shaped VM vm/run-pc.sh reproduces the photo exactly. kd hung with no i8042
+DONE 2026-10-30 (PC-shaped VM, vm/run-pc.sh): boots to "tuxhurd console login:" with root ld2 behind a PCIe
+root port, e1000e behind a root port with DHCP + ssh, no PS/2. Fixes: ppb-rump.diff (rumpkernel -10tux2,
+rumpdisk-nvme.static + rumpnet relinked), gnumach no-i8042 (kdinit + PS/2 mouse open). NEXT: USB keyboard
+(ukbd-rump.diff -> rumpkernel -10tux3, build tuxkbd, inittab), then quiet the autoconf spam.
+Old notes: PC-shaped VM vm/run-pc.sh reproduces the photo exactly. kd hung with no i8042
 (fixed: patches/gnumach/no-i8042). ppb-rump.diff written, rumpkernel 0~20250111-10tux2 building in the
 build VM (vm/build-vm.sh; build disk is now a 2nd NVMe ld1, IDE panicked in pciide_dma). Every layer is
 repaired offline first (vm/fsck-layer.sh). After the build: dpkg -i the debs into prepared-install3,
