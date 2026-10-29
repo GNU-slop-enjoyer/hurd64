@@ -36,7 +36,14 @@ ext2fs mitigation (2026-10-30): an idle boot + clean poweroff leaves 3 "deleted 
 with FSCKFIX=yes, so it repairs itself and never stops in a maintenance shell (2 boots tested).
 Root cause (processes still running when ext2fs syncs at shutdown) is still open.
 DISK REINSTALLED 2026-10-30 from install4.raw = PC-VM-tested image (USB keyboard login, quiet console).
-SMP ROOT CAUSE FOUND 2026-10-30: it is a race in ext2fs (libdiskfs/libpager), not the kernel.
+SMP SHIPPED 2026-10-30 (disk reinstalled from install5.raw): gnumach ncpus=4 (build/gnumach-smp4fb) on the ESP,
+/etc/boot.d/tux-smp -> /usr/local/sbin/tux-smp: all Hurd servers (/hurd/* + boot servers) into a 1-CPU set on the
+last CPU (utils/cpuset), then the other CPUs into the default set (utils/smpctl -x). Tested on run-pc.sh with
+8 vCPUs: 4 started, 3 for programs, stress2 5/5, 3 jobs parallel, apt OK, USB keyboard login OK.
+OPEN: (a) with more than 4 CPUs STARTED (ncpus=8 or 32 on 8 vCPUs) adding even one AP to the default set kills
+the system with no load: kernel bug that scales with started CPUs. (b) the ext2fs race itself. (c) fs-heavy
+work is slower (servers share one CPU).
+Earlier: SMP ROOT CAUSE FOUND 2026-10-30: it is a race in ext2fs (libdiskfs/libpager), not the kernel.
 utils/cpuset.c puts a task in its own 1-CPU processor set (task_assign). With root ext2fs (pid 8) pinned to
 cpu 3 and everything else on cpus 0-2: 0 "invalid address", no hang, stress2 4/4 (36 s each). Without the
 pin: 86 errors + hang. Workaround: at boot smpctl + cpuset all ext2fs. Real fix: find the race.
