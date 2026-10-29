@@ -1,0 +1,71 @@
+From 5f173285ef2fa6cf5d6cf2830b578a057f821ae8 Mon Sep 17 00:00:00 2001
+From: GNU-slop-enjoyer <johnepstein420@gmail.com>
+Date: Thu, 29 Oct 2026 20:14:18 +0100
+Subject: [PATCH] rumpdisk, rumpnet: boot the rump kernel quietly
+
+NetBSD's autoconf prints a line for every PCI device without a driver
+in that rump kernel, which floods the console at boot.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ rumpdisk/block-rump.c | 1 +
+ rumpdisk/main.c       | 3 ++-
+ rumpnet/main.c        | 3 ++-
+ rumpnet/net-rump.c    | 1 +
+ 4 files changed, 6 insertions(+), 2 deletions(-)
+
+diff --git a/rumpdisk/block-rump.c b/rumpdisk/block-rump.c
+index b8ff54ff..255437d2 100644
+--- a/rumpdisk/block-rump.c
++++ b/rumpdisk/block-rump.c
+@@ -224,6 +224,7 @@ rumpdisk_device_init (void)
+       mach_port_deallocate (mach_task_self (), device_master);
+     }
+ 
++  rump_boot_sethowto (RUMP_AB_QUIET);
+   rump_init ();
+ }
+ 
+diff --git a/rumpdisk/main.c b/rumpdisk/main.c
+index 0bd753e2..f4f5565e 100644
+--- a/rumpdisk/main.c
++++ b/rumpdisk/main.c
+@@ -149,7 +149,8 @@ main (int argc, char **argv)
+   pthread_t t;
+ 
+   setenv ("RUMP_NCPU", "1", 1);
+-  setenv ("RUMP_VERBOSE", "1", 1);
++  /* quiet: NetBSD autoconf lists every PCI device it has no driver for */
++  setenv ("RUMP_VERBOSE", "0", 1);
+   setenv ("RUMP_HOSTNAME", "HURD0", 1);
+   setenv ("HOSTNAME", "HURD0", 1);
+   setenv ("RUMP_PANIC", "1", 1);
+diff --git a/rumpnet/main.c b/rumpnet/main.c
+index 4385048f..63e49633 100644
+--- a/rumpnet/main.c
++++ b/rumpnet/main.c
+@@ -117,7 +117,8 @@ main (int argc, char **argv)
+   pthread_t t;
+ 
+   setenv ("RUMP_NCPU", "1", 1);
+-  setenv ("RUMP_VERBOSE", "1", 1);
++  /* quiet: NetBSD autoconf lists every PCI device it has no driver for */
++  setenv ("RUMP_VERBOSE", "0", 1);
+   setenv ("RUMP_HOSTNAME", "HURD0", 1);
+   setenv ("HOSTNAME", "HURD0", 1);
+   setenv ("RUMP_PANIC", "1", 1);
+diff --git a/rumpnet/net-rump.c b/rumpnet/net-rump.c
+index 659b0df4..b28c475c 100644
+--- a/rumpnet/net-rump.c
++++ b/rumpnet/net-rump.c
+@@ -899,6 +899,7 @@ device_set_filter (void *d, mach_port_t port, int priority,
+ 
+ static void rumpnet_init (void)
+ {
++  rump_boot_sethowto (RUMP_AB_QUIET);
+   rump_init();
+   socket_init();
+ }
+-- 
+2.55.0
+

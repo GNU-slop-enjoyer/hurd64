@@ -57,15 +57,14 @@ diff -Nru a/buildrump.sh/src/sys/rump/dev/lib/libukbd/UKBD.ioconf b/buildrump.sh
 +
 +uhidev*	at uhub? port ? configuration ? interface ?
 +ukbd*	at uhidev? reportid ?
-diff -Nru a/buildrump.sh/src/sys/rump/dev/Makefile.rumpdevcomp b/buildrump.sh/src/sys/rump/dev/Makefile.rumpdevcomp
---- a/buildrump.sh/src/sys/rump/dev/Makefile.rumpdevcomp	2026-10-29 19:53:10.941849133 +0100
-+++ b/buildrump.sh/src/sys/rump/dev/Makefile.rumpdevcomp	2026-10-29 19:53:10.942830092 +0100
-@@ -5,7 +5,7 @@
- 		pad pud	putter raidframe rnd scsipi sysmon vnd wscons	\
+--- a/buildrump.sh/src/sys/rump/dev/Makefile.rumpdevcomp	2026-10-29 19:13:01.000000000 +0000
++++ b/buildrump.sh/src/sys/rump/dev/Makefile.rumpdevcomp	2026-10-29 19:13:01.000000000 +0000
+@@ -6,7 +6,7 @@
  		opencrypto
+ RUMPDEVCOMP+=	pci_nvme pci_ld pci_ld_nvme
  
 -RUMPUSBDEVS=	ualea ubt ucom ugenhc ulpt umass usb
 +RUMPUSBDEVS=	ualea ubt ucom ugenhc ukbd ulpt umass usb
  
- RUMPPCIDEVS=	pci pci_if_iwn pci_if_pcn pci_if_wm
- RUMPPCIDEVS+=	pci_usbhc
+ RUMPPCIDEVS=	pci pci_if_iwn pci_if_pcn pci_if_wm pci_if_rge
+ RUMPPCIDEVS+=	pci_ahcisata

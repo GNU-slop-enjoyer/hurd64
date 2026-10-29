@@ -217,6 +217,7 @@ int main(int argc, char **argv)
 		perror("tuxkbd: pty");
 		return 1;
 	}
+	rump_boot_sethowto(RUMP_AB_QUIET);
 	if (rump_init() != 0) {
 		dprintf(out, "tuxkbd: rump_init failed\r\n");
 		return 1;
