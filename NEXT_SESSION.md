@@ -25,6 +25,11 @@ NVMe/NIC/xHCI sit behind PCIe bridges. (2) Hurd reads only the PS/2 keyboard. (3
 RULE NOW: test only on a QEMU machine shaped like the PC: `-machine q35,i8042=off`, devices behind
 pcie-root-port, xHCI + usb-kbd only, UEFI. The user does not want to boot again until it is a usable
 login with a working keyboard. Then continue through all items incl. iGPU + Wayland.
+Progress 2026-10-30: PC-shaped VM vm/run-pc.sh reproduces the photo exactly. kd hung with no i8042
+(fixed: patches/gnumach/no-i8042). ppb-rump.diff written, rumpkernel 0~20250111-10tux2 building in the
+build VM (vm/build-vm.sh; build disk is now a 2nd NVMe ld1, IDE panicked in pciide_dma). Every layer is
+repaired offline first (vm/fsck-layer.sh). After the build: dpkg -i the debs into prepared-install3,
+RELINK rumpdisk-nvme.static and rumpnet(.static) against them (static libs!), test with run-pc.sh.
 Fix order: a) ppb in rump pci (ppb-rump.diff: libpci SRCS += ppb.c, PCI.ioconf `ppb* at pci?` +
 `pci* at ppb? bus ?`), check IRQs behind bridges; b) quiet autoconf; c) USB keyboard (rump
 usb + ukbd/uhid -> Hurd console input); d) ext2fs fsck errors; e) SMP; f) iGPU; g) Wayland.

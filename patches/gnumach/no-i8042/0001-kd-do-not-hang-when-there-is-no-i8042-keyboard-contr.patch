@@ -1,0 +1,108 @@
+From c5f4925230d9a85a1d1a616f3c9b01552a0a88de Mon Sep 17 00:00:00 2001
+From: GNU-slop-enjoyer <johnepstein420@gmail.com>
+Date: Thu, 29 Oct 2026 19:03:01 +0100
+Subject: [PATCH] kd: do not hang when there is no i8042 keyboard controller
+
+Some UEFI machines have no PS/2 controller; its status port reads all
+ones and kdinit spun forever waiting for the input buffer to drain.
+Detect that and skip everything that talks to the controller.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ i386/i386at/kd.c | 24 ++++++++++++++++++++++--
+ 1 file changed, 22 insertions(+), 2 deletions(-)
+
+diff --git a/i386/i386at/kd.c b/i386/i386at/kd.c
+index 7b18d620..d0f9f1aa 100644
+--- a/i386/i386at/kd.c
++++ b/i386/i386at/kd.c
+@@ -186,6 +186,9 @@ u_char	kd_nextled	= 0;
+  * threads are running.
+  */
+ boolean_t kd_initialized 	= FALSE;	/* driver initialized? */
++/* No i8042 keyboard controller: some UEFI machines have none, and its status
++   port then reads all ones.  Everything that would wait on it is skipped.  */
++static boolean_t kd_kbc_absent = FALSE;
+ boolean_t kd_extended	= FALSE;
+ 
+ /* Array for processing escape sequences. */
+@@ -709,7 +712,7 @@ kdintr(int vec)
+ 	if (kd_pollc)
+ 	    return;				/* kdb polling kbd */
+ 
+-	if (!kd_initialized)
++	if (!kd_initialized || kd_kbc_absent)
+ 		return;
+ 
+ 	tp = &kd_tty;
+@@ -1117,6 +1120,13 @@ kdinit(void)
+ 	 */
+ 	kd_xga_init();
+ 
++	if (inb(K_STATUS) == 0xff) {
++		kd_kbc_absent = TRUE;
++		kd_initialized = TRUE;
++		printf("kd: no PS/2 keyboard controller\n");
++		return;
++	}
++
+ 	/* get rid of any garbage in output buffer */
+ 	if (inb(K_STATUS) & K_OBUF_FUL)
+ 		(void)inb(K_RDWR);
+@@ -2268,6 +2278,8 @@ kd_islower(u_char c)
+ void
+ kd_senddata(unsigned char ch)
+ {
++	if (kd_kbc_absent)
++		return;
+ 	while (inb(K_STATUS) & K_IBUF_FUL)
+ 		;
+ 	outb(K_RDWR, ch);
+@@ -2286,6 +2298,8 @@ kd_senddata(unsigned char ch)
+ void
+ kd_sendcmd(unsigned char ch)
+ {
++	if (kd_kbc_absent)
++		return;
+ 	while (inb(K_STATUS) & K_IBUF_FUL)
+ 		;
+ 	outb(K_CMD, ch);
+@@ -2303,6 +2317,8 @@ kd_sendcmd(unsigned char ch)
+ unsigned char
+ kd_getdata(void)
+ {
++	if (kd_kbc_absent)
++		return 0;
+ 	while ((inb(K_STATUS) & K_OBUF_FUL) == 0)
+ 		;
+ 	return(inb(K_RDWR));
+@@ -2313,6 +2329,8 @@ kd_cmdreg_write(int val)
+ {
+ int ch=KC_CMD_WRITE;
+ 
++	if (kd_kbc_absent)
++		return;
+ 	while (inb(K_STATUS) & K_IBUF_FUL)
+ 		;
+ 	outb(K_CMD, ch);
+@@ -2326,6 +2344,8 @@ void
+ kd_mouse_drain(void)
+ {
+ 	int i;
++	if (kd_kbc_absent)
++		return;
+ 	while(inb(K_STATUS) & K_IBUF_FUL)
+ 		;
+ 	while((i = inb(K_STATUS)) & K_OBUF_FUL)
+@@ -3018,7 +3038,7 @@ kdcnmaygetc(void)
+ #endif
+ 	boolean_t	up;
+ 
+-	if (! kd_initialized)
++	if (! kd_initialized || kd_kbc_absent)
+ 		return -1;
+ 
+ 	kd_extended = FALSE;
+-- 
+2.55.0
+

@@ -1,0 +1,28 @@
+Description: attach PCI-PCI bridges (ppb) so devices behind PCIe root ports are found
+ Real machines put NVMe, NICs and xHCI behind PCIe root ports; without ppb
+ only bus 0 was ever scanned.
+Author: tuxhurd
+
+diff -Nru a/buildrump.sh/src/sys/rump/dev/lib/libpci/Makefile b/buildrump.sh/src/sys/rump/dev/lib/libpci/Makefile
+--- a/buildrump.sh/src/sys/rump/dev/lib/libpci/Makefile	2026-10-29 19:03:26.995067147 +0100
++++ b/buildrump.sh/src/sys/rump/dev/lib/libpci/Makefile	2026-10-29 19:03:26.996050350 +0100
+@@ -14,6 +14,8 @@
+ 
+ SRCS+=	pci.c pci_map.c pci_quirks.c pci_subr.c pci_stub.c pci_usrreq.c
+ SRCS+=	pcibusprint.c
++# PCI-PCI bridges, so devices behind PCIe root ports and switches attach
++SRCS+=	ppb.c
+ 
+ SRCS+=	rumpdev_pci.c
+ 
+diff -Nru a/buildrump.sh/src/sys/rump/dev/lib/libpci/PCI.ioconf b/buildrump.sh/src/sys/rump/dev/lib/libpci/PCI.ioconf
+--- a/buildrump.sh/src/sys/rump/dev/lib/libpci/PCI.ioconf	2026-10-29 19:03:26.995081203 +0100
++++ b/buildrump.sh/src/sys/rump/dev/lib/libpci/PCI.ioconf	2026-10-29 19:03:26.996050350 +0100
+@@ -10,3 +10,7 @@
+ pseudo-root mainbus*
+ 
+ pci*    at mainbus? bus ?
++
++# PCI-PCI bridges and the buses behind them
++ppb*	at pci? dev ? function ?
++pci*	at ppb? bus ?
