@@ -111,5 +111,8 @@ package (0.9.git20261028-2) as a dependency, so the stall may come from that and
 
 Known: kernel console is still console=com0 (serial). The real machine needs a framebuffer console.
 
+## Install (item 6), 2026-10-29: done
+See INSTALLATION.md. Verified: partition table, e2fsck -f clean after resize (it fixed leaked inodes left by Hurd ext2fs first), ESP files byte-identical to the build, root has fstab on ld2 and rumpnet. Not yet booted on the real machine.
+
 ## Not started
 NVMe driver, RTL8125 driver, UEFI boot on the real machine, display/input, GPU, Wayland, install.

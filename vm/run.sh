@@ -15,7 +15,7 @@ fi
 # FW=efi: OVMF firmware, efi/vars.qcow2 for its variables, esp/ served as a FAT system partition
 FWARGS=""
 if [ "$FW" = efi ]; then
-  FWARGS="-drive if=pflash,format=qcow2,readonly=on,file=/usr/share/edk2-ovmf/OVMF_CODE_4M.qcow2 -drive if=pflash,format=qcow2,file=efi/vars.qcow2 -drive file=fat:rw:esp,format=raw,if=ide,index=1"
+  FWARGS="-drive if=pflash,format=qcow2,readonly=on,file=/usr/share/edk2-ovmf/OVMF_CODE_4M.qcow2 -drive if=pflash,format=qcow2,file=efi/vars.qcow2 -drive file=fat:rw:${ESPDIR:-esp},format=raw,if=ide,index=1"
 fi
 # ACCEL=tcg: no KVM, for -d int tracing (set QDEBUG="-d int,cpu_reset -D qdebug.log -no-reboot")
 if [ "$ACCEL" = tcg ]; then ACC="-accel tcg -cpu max"; else ACC="-enable-kvm -cpu host"; fi
