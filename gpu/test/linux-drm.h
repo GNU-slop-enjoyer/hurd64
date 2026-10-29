@@ -5,9 +5,19 @@
 #define LINUX_DRM_H
 #include <stdint.h>
 
-#define L_IOC(dir, nr, size)	(((dir) << 30) | ((size) << 16) | ('d' << 8) | (nr))
+#define L_IOC(dir, nr, size)	(((unsigned)(dir) << 30) | ((size) << 16) | ('d' << 8) | (nr))
 #define L_IO(nr)		L_IOC(0, nr, 0)
 #define L_IOWR(nr, type)	L_IOC(3, nr, sizeof(type))
+
+struct drm_version {
+	int version_major, version_minor, version_patchlevel;
+	unsigned long name_len;
+	char *name;
+	unsigned long date_len;
+	char *date;
+	unsigned long desc_len;
+	char *desc;
+};
 
 struct drm_mode_card_res {
 	uint64_t fb_id_ptr, crtc_id_ptr, connector_id_ptr, encoder_id_ptr;
@@ -54,6 +64,7 @@ struct drm_mode_map_dumb {
 	uint64_t offset;
 };
 
+#define DRM_IOCTL_VERSION		L_IOWR(0x00, struct drm_version)
 #define DRM_IOCTL_SET_MASTER		L_IO(0x1e)
 #define DRM_IOCTL_MODE_GETRESOURCES	L_IOWR(0xA0, struct drm_mode_card_res)
 #define DRM_IOCTL_MODE_SETCRTC		L_IOWR(0xA2, struct drm_mode_crtc)

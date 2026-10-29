@@ -31,6 +31,7 @@
 #include <mach.h>
 #include <mach/gnumach.h>
 #include <mach/mach4.h>
+#include <mach_error.h>
 #include <device/device.h>
 #include <pciaccess.h>
 
@@ -55,7 +56,7 @@ static uintptr_t ram_lkl;
 
 /* BARs mapped straight in; everything else goes through LKL's iomem table */
 #define MAX_DIRECT 8
-static struct { uintptr_t start; size_t size; } direct[MAX_DIRECT];
+static struct { uintptr_t start; size_t size; mach_port_t proxy; } direct[MAX_DIRECT];
 static int ndirect;
 
 struct lkl_pci_dev {
@@ -113,8 +114,10 @@ static void *hurd_shmem_mmap(void *addr, unsigned long pg_off, unsigned long siz
 	vm_prot_t p = 0;
 	vm_address_t base = (vm_address_t)addr;
 
-	if (pg_off + size > ram_size)
+	if (pg_off + size > ram_size) {
+		lkl_printf("lkl_hurd: RAM offset 0x%lx+0x%lx is past the end\n", pg_off, size);
 		return NULL;
+	}
 	if (prot & LKL_PROT_READ)
 		p |= VM_PROT_READ;
 	if (prot & LKL_PROT_WRITE)
@@ -133,8 +136,15 @@ static void *hurd_shmem_mmap(void *addr, unsigned long pg_off, unsigned long siz
 
 		if (n > size - done)
 			n = size - done;
-		if (vm_map(mach_task_self(), &va, n, 0, FALSE, chunk[off / CHUNK].proxy,
-			   off % CHUNK, FALSE, p, VM_PROT_ALL, VM_INHERIT_NONE)) {
+		/* Linux set a new page for this address: drop whatever was there */
+		if (addr)
+			vm_deallocate(mach_task_self(), va, n);
+		kern_return_t kr = vm_map(mach_task_self(), &va, n, 0, FALSE,
+					  chunk[off / CHUNK].proxy, off % CHUNK, FALSE,
+					  p, VM_PROT_ALL, VM_INHERIT_NONE);
+		if (kr) {
+			lkl_printf("lkl_hurd: cannot map RAM at %p: %s\n", (void *)va,
+				   mach_error_string(kr));
 			if (done)
 				vm_deallocate(mach_task_self(), base, done);
 			return NULL;
@@ -190,6 +200,42 @@ static int hurd_iomem_access(const volatile void *addr, void *val, int size, int
 		return -1;
 	}
 	return 0;
+}
+
+/* A mapping of device memory where LKL asks for it (a GPU buffer in VRAM
+   that Linux maps for its "user", i.e. this process), sharing the BAR's
+   pages through a proxy of the BAR mapping. */
+static void *hurd_iomem_mmap(void *addr, void *iomem, unsigned long size,
+			     enum lkl_prot prot)
+{
+	uintptr_t a = (uintptr_t)iomem;
+	vm_address_t va = (vm_address_t)addr;
+	vm_prot_t p = VM_PROT_READ | VM_PROT_WRITE;
+
+	for (int i = 0; i < ndirect; i++) {
+		if (a < direct[i].start || a - direct[i].start + size > direct[i].size)
+			continue;
+		kern_return_t kr = 0;
+
+		if (direct[i].proxy == MACH_PORT_NULL
+		    && (kr = vm_region_create_proxy(mach_task_self(), direct[i].start, p,
+						    direct[i].size, &direct[i].proxy))) {
+			direct[i].proxy = MACH_PORT_NULL;
+			lkl_printf("lkl_hurd: no proxy for BAR mapping %p: %s\n",
+				   (void *)direct[i].start, mach_error_string(kr));
+			return NULL;
+		}
+		vm_deallocate(mach_task_self(), va, size);
+		if ((kr = vm_map(mach_task_self(), &va, size, 0, FALSE, direct[i].proxy,
+				 a - direct[i].start, FALSE, p, p, VM_INHERIT_NONE))) {
+			lkl_printf("lkl_hurd: cannot map device memory at %p: %s\n",
+				   addr, mach_error_string(kr));
+			return NULL;
+		}
+		return (void *)va;
+	}
+	lkl_printf("lkl_hurd: %p is not device memory\n", iomem);
+	return NULL;
 }
 
 /* PCI */
@@ -258,6 +304,7 @@ static void *hurd_resource_alloc(struct lkl_pci_dev *d, unsigned long size,
 		return NULL;
 	direct[ndirect].start = (uintptr_t)p;
 	direct[ndirect].size = size;
+	direct[ndirect].proxy = MACH_PORT_NULL;
 	ndirect++;
 	lkl_printf("lkl_hurd: BAR%d 0x%llx (%lu KiB) mapped\n", idx,
 		   (unsigned long long)r->base_addr, size >> 10);
@@ -475,5 +522,6 @@ __attribute__((constructor)) static void hurd_host_ops(void)
 	lkl_host_ops.shmem_mmap = hurd_shmem_mmap;
 	lkl_host_ops.ioremap = hurd_ioremap;
 	lkl_host_ops.iomem_access = hurd_iomem_access;
+	lkl_host_ops.iomem_mmap = hurd_iomem_mmap;
 	lkl_host_ops.pci_ops = &hurd_pci_ops;
 }

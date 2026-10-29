@@ -63,6 +63,38 @@ index 000000000..584f75e12
 +static inline void kernel_fpu_end(void) { }
 +
 +#endif
+diff --git a/arch/lkl/include/uapi/asm/host_ops.h b/arch/lkl/include/uapi/asm/host_ops.h
+index 673a05951..b5bf4a32c 100644
+--- a/arch/lkl/include/uapi/asm/host_ops.h
++++ b/arch/lkl/include/uapi/asm/host_ops.h
+@@ -199,6 +199,9 @@ struct lkl_host_operations {
+ 	void (*shmem_init)(unsigned long size);
+ 	void *(*shmem_mmap)(void *addr, unsigned long pg_off, unsigned long size,
+ 				enum lkl_prot prot);
++	/* map device memory (a BAR the host mapped at iomem) at addr */
++	void *(*iomem_mmap)(void *addr, void *iomem, unsigned long size,
++			    enum lkl_prot prot);
+ 
+ 	struct lkl_dev_pci_ops *pci_ops;
+ };
+diff --git a/arch/lkl/mm/mmu_mem.c b/arch/lkl/mm/mmu_mem.c
+index a11358669..931ef242a 100644
+--- a/arch/lkl/mm/mmu_mem.c
++++ b/arch/lkl/mm/mmu_mem.c
+@@ -46,7 +46,12 @@ void mmap_pages_for_ptes(unsigned long va, unsigned int nr, pte_t pte)
+ 	unsigned long pa = pte.pte & PAGE_MASK;
+ 	unsigned long pg_off = pa - (ARCH_PFN_OFFSET << PAGE_SHIFT);
+ 
+-	void *res = lkl_ops->shmem_mmap((void *)va, pg_off, PAGE_SIZE * nr, prot);
++	void *res = pfn_valid(pa >> PAGE_SHIFT) ?
++		lkl_ops->shmem_mmap((void *)va, pg_off, PAGE_SIZE * nr, prot) :
++		/* not RAM: device memory, e.g. a GPU buffer in VRAM; its
++		   "physical" address is where the host mapped the BAR */
++		lkl_ops->iomem_mmap ?
++		lkl_ops->iomem_mmap((void *)va, (void *)pa, PAGE_SIZE * nr, prot) : NULL;
+ 
+ 	BUG_ON(res != (void *)va);
+ }
 diff --git a/drivers/gpu/drm/amd/amdgpu/amdgpu_bios.c b/drivers/gpu/drm/amd/amdgpu/amdgpu_bios.c
 index 45affc025..ea03cb2ca 100644
 --- a/drivers/gpu/drm/amd/amdgpu/amdgpu_bios.c

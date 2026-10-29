@@ -1,12 +1,12 @@
 /* kms-test: light up a display through Linux's DRM/KMS inside LKL.
  *
- *   kms-test [card] [MiB] [kernel arguments...]     card: 0 (default), 1, ...
+ *   kms-test [driver] [MiB] [kernel arguments...]   driver: vkms (default), amdgpu, bochs-drm
  *
- * Boots LKL (Linux with amdgpu and vkms), opens /dev/dri/cardN in it, picks
+ * Boots LKL (Linux with amdgpu and vkms), opens the card of that driver in it, picks
  * the first connected connector and its preferred mode, makes a dumb
  * buffer, maps it into this process, draws colour bars and shows it. The
  * buffer is mapped twice to check that both mappings see the same pages.
- * Without a GPU (lkl_pci=...) card0 is vkms, Linux's virtual display.
+ * vkms is Linux's virtual display; a real card is passed in with lkl_pci=.
  */
 #include <stdio.h>
 #include <stdlib.h>
@@ -29,7 +29,7 @@ static long ioc(int fd, unsigned long req, void *arg, const char *what)
 
 int main(int argc, char **argv)
 {
-	int card = argc > 1 ? atoi(argv[1]) : 0;
+	const char *driver = argc > 1 ? argv[1] : "vkms";
 	int mib = argc > 2 ? atoi(argv[2]) : 256;
 	char cmd[1024], path[32];
 
@@ -49,18 +49,32 @@ int main(int argc, char **argv)
 		return 1;
 	}
 
-	/* a GPU probes in the background: wait for its node */
-	snprintf(path, sizeof path, "/dev/dri/card%d", card);
+	/* a GPU probes in the background: wait until a card with that driver
+	   shows up */
 	int fd = -1;
-	for (int i = 0; i < 300 && fd < 0; i++) {
-		fd = lkl_sys_open(path, LKL_O_RDWR, 0);
+	for (int t = 0; t < 300 && fd < 0; t++) {
+		for (int c = 0; c < 4 && fd < 0; c++) {
+			char name[32] = "";
+			struct drm_version v = { .name_len = sizeof name - 1, .name = name };
+
+			snprintf(path, sizeof path, "/dev/dri/card%d", c);
+			fd = lkl_sys_open(path, LKL_O_RDWR, 0);
+			if (fd < 0)
+				continue;
+			if (lkl_sys_ioctl(fd, DRM_IOCTL_VERSION, (long)&v) < 0
+			    || strcmp(name, driver)) {
+				lkl_sys_close(fd);
+				fd = -1;
+			}
+		}
 		if (fd < 0)
 			usleep(100000);
 	}
 	if (fd < 0) {
-		fprintf(stderr, "kms-test: no %s\n", path);
+		fprintf(stderr, "kms-test: no %s card\n", driver);
 		return 1;
 	}
+	printf("%s is %s\n", path, driver);
 	ioc(fd, DRM_IOCTL_SET_MASTER, NULL, "SET_MASTER");
 
 	struct drm_mode_card_res res = { 0 };

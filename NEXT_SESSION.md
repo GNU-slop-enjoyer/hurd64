@@ -10,7 +10,9 @@ runs inside a Hurd process (lkl-hurd/, test/lkl-boot.c), and the Hurd PCI host c
 vm/build-vm-vt.sh: Linux virtio-blk in LKL read the partition table of a QEMU virtio disk (BAR MMIO, DMA via 4 MiB
 chunks, INTx via libirqhelp). virtio needs iommu_platform=on (else it bypasses the DMA API and scribbles over RAM).
 KMS (2026-10-30): gpu/test/kms-test.c sets a mode and shows a dumb buffer drawn by the Hurd process, with vkms inside LKL
-(passes on Linux and the Hurd). Needed: mm/gup.c populates PFN maps under LKL (no page faults in LKL), LKL RAM/mmap moved
+(passes on Linux and the Hurd). 2026-10-30: also on a QEMU bochs-display (vm/build-vm-bochs.sh, `./kms-test bochs-drm 256
+lkl_pci=00:0c.0`): VRAM BO mapped via new host op iomem_mmap (proxy of the BAR mapping), picture verified by screendump.
+Fixed-address host mappings now replace what is there (LKL re-sets PTEs without unmapping). Needed: mm/gup.c populates PFN maps under LKL (no page faults in LKL), LKL RAM/mmap moved
 to 0x4000000000/0x1000000000 (Hurd loads programs at 0x400000). Plan: the compositor process embeds LKL+amdgpu.
 NEXT: user ran `sudo gpu/igpu-vfio.sh` (2026-10-29), VFCT copied, VBIOS 13c0 + 7550 built into lkl.o. After the reboot (check
 `lspci -ks 13:00.0` = vfio-pci, `ulimit -l` = 8388608): copy lkl-s.o to the VM, vm/build-vm-gpu.sh, then `./lkl-boot 1024 lkl_pci=00:0b.0` in /build/lkl/lkl-hurd.
