@@ -8,12 +8,13 @@ CFLAGS = -O2 -g -fPIC -pthread -Wall -Wno-unused-parameter \
 LIBSRC = fs iomem jmp_buf posix-host utils virtio
 OBJS = $(LIBSRC:%=lib-%.o) hurd_host.o
 
-all: liblkl-hurd.a lkl-boot
+all: liblkl-hurd.a lkl-boot kms-test
 
 # the generated one describes the Linux host (VFIO, FUSE, ...)
-$(OBJS): $(LKL)/include/lkl_autoconf.h
-$(LKL)/include/lkl_autoconf.h: lkl_autoconf.h
-	cp $< $@
+$(OBJS): autoconf
+.PHONY: autoconf
+autoconf:
+	cmp -s lkl_autoconf.h $(LKL)/include/lkl_autoconf.h || cp lkl_autoconf.h $(LKL)/include/lkl_autoconf.h
 
 # the Hurd has no PTHREAD_KEYS_MAX (no limit); posix-host.c sizes a table with it
 lib-%.o: $(LKL)/lib/%.c
@@ -30,4 +31,8 @@ lkl-boot: $(LKL)/test/lkl-boot.c liblkl-hurd.a
 	$(CC) $(CFLAGS) -o $@ $< -Wl,--whole-archive liblkl-hurd.a -Wl,--no-whole-archive -lpciaccess -lirqhelp -lpthread -lrt
 
 clean:
-	rm -f *.o liblkl-hurd.a lkl-boot
+	rm -f *.o liblkl-hurd.a lkl-boot kms-test
+
+# KMS through Linux inside LKL: vkms without hardware, amdgpu with lkl_pci=
+kms-test: $(LKL)/test/kms-test.c liblkl-hurd.a
+	$(CC) $(CFLAGS) -o $@ $< -Wl,--whole-archive liblkl-hurd.a -Wl,--no-whole-archive -lpciaccess -lirqhelp -lpthread -lrt

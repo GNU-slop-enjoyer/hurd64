@@ -1,5 +1,5 @@
 diff --git a/arch/lkl/Kconfig b/arch/lkl/Kconfig
-index ffb706aa7..4ff745ff0 100644
+index ffb706aa7..a1d8bb0c4 100644
 --- a/arch/lkl/Kconfig
 +++ b/arch/lkl/Kconfig
 @@ -15,6 +15,7 @@ config LKL
@@ -10,6 +10,24 @@ index ffb706aa7..4ff745ff0 100644
  
  config LKL_FUZZING
  	bool "LLVM fuzzing instrumentation"
+@@ -62,7 +63,7 @@ config PGTABLE_LEVELS
+ 	default 3
+ 
+ config LKL_MEMORY_START
+-	hex
++	hex "Virtual address of LKL's RAM"
+ 	default 0x50000000
+ 	help
+ 	  Base address of kernel virtual address space for LKL. No particular
+@@ -71,7 +72,7 @@ config LKL_MEMORY_START
+ 	  STACK_TOP and VMALLOC_START values depend on it.
+ 
+ config LKL_TASK_UNMAPPED_BASE
+-	hex
++	hex "Lowest address for LKL user mmap"
+ 	default 0x100000
+ 	help
+ 	  Starting virtual address for LKL user-space mmap. It is assumed that
 diff --git a/arch/lkl/Makefile b/arch/lkl/Makefile
 index 003ca5a75..34feb9411 100644
 --- a/arch/lkl/Makefile
@@ -118,6 +136,44 @@ index b3fffe7b5..e4ddec5dd 100644
  	if (caching == ttm_write_combined)
  		tmp = pgprot_writecombine(tmp);
  #ifndef CONFIG_UML
+diff --git a/mm/gup.c b/mm/gup.c
+index ad0c8922d..f16fbdf66 100644
+--- a/mm/gup.c
++++ b/mm/gup.c
+@@ -1899,6 +1899,22 @@ long populate_vma_page_range(struct vm_area_struct *vma,
+ 	if (!vma_is_accessible(vma))
+ 		return -EFAULT;
+ 
++#ifdef CONFIG_LKL
++	/*
++	 * LKL takes no page faults: a mapping only works if MAP_POPULATE
++	 * filled it in. GUP refuses PFN maps (GPU buffers, device memory), so
++	 * fault those in here, page by page.
++	 */
++	if (vma->vm_flags & (VM_IO | VM_PFNMAP)) {
++		unsigned int flags = (vma->vm_flags & VM_WRITE) ? FAULT_FLAG_WRITE : 0;
++
++		for (unsigned long addr = start; addr < end; addr += PAGE_SIZE)
++			if (handle_mm_fault(vma, addr, flags, NULL) & VM_FAULT_ERROR)
++				return -EFAULT;
++		return nr_pages;
++	}
++#endif
++
+ 	gup_flags = FOLL_TOUCH;
+ 	/*
+ 	 * We want to touch writable mappings with a write fault in order
+@@ -2014,8 +2030,10 @@ int __mm_populate(unsigned long start, unsigned long len, int ignore_errors)
+ 		 * range with the first VMA. Also, skip undesirable VMA types.
+ 		 */
+ 		nend = min(end, vma->vm_end);
++#ifndef CONFIG_LKL	/* populate_vma_page_range() handles them for LKL */
+ 		if (vma->vm_flags & (VM_IO | VM_PFNMAP))
+ 			continue;
++#endif
+ 		if (nstart < vma->vm_start)
+ 			nstart = vma->vm_start;
+ 		/*
 diff --git a/tools/lkl/lib/posix-host.c b/tools/lkl/lib/posix-host.c
 index 2f4e0191d..c955cc123 100644
 --- a/tools/lkl/lib/posix-host.c

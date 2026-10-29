@@ -10,3 +10,4 @@ gpu/test/lkl-boot
 gpu/lkl-hurd/*.o
 gpu/lkl-hurd/*.a
 gpu/lkl-hurd/lkl-boot
+gpu/lkl-hurd/kms-test
