@@ -1,12 +1,11 @@
 # APIs and tools
 
-## Free LLM fallback (freellm): NOT configured
-- Tool: `freellm` (~/.claude/skills/google/freellm, source freellm.c). Lists the
-  awesome-freellm-apis providers and sends one OpenAI-style chat request with a stored key.
-- Checked 2026-10-28: `freellm keys` -> "no keys". `freellm ask groq ...` and `freellm ask gemini ...`
-  both fail with "no key for ..." (exit 1). Only the fake-key error path was ever tested.
-- To enable: the user runs `freellm key groq` (or another provider) in their own terminal.
-  Then test with `freellm ask groq <model> "Reply with the word OK."` before relying on it.
+## Free LLM fallback (freellm): Groq configured and tested
+- Tool: `freellm` (~/.claude/skills/google/freellm, source freellm.c).
+- 2026-10-29: the user stored a Groq key. It had been pasted twice (112 chars); fixed to the first half.
+  The README's Groq model ids were stale ("does not exist"), so `freellm models <provider>` was added.
+- Test: `freellm ask groq openai/gpt-oss-120b "Reply with the word OK."` printed `OK`, exit 0.
+- Use it only for small, self-contained jobs; check the output before using it.
 
 ## Why there is no automatic takeover at the usage limit
 When Claude Code reaches its limit the model stops answering. A hook can run a script, but no

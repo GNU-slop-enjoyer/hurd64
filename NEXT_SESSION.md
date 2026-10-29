@@ -16,6 +16,10 @@
   zlib1g-dev uuid-dev libblkid-dev) were installed into work.qcow2 only. Install them into
   prepared.qcow2 instead, or reinstall each boot.
 
+## Order (user, 2026-10-29)
+1 SMP hang, 2 >3.5 GB RAM, 3 NVMe, 4 RTL8125, 5 UEFI boot on the real PC, 6 install (wipes tuxmin, final OK first),
+then GPU on the Granite Ridge iGPU only, then Wayland.
+
 ## Next commands
 0. SMP hang (see PROJECT_STATUS.md "The hang, as seen in kdb"). Open question: why does
    CPU 0 not pick up next_thread although it is awake every tick? Next checks, in order:

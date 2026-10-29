@@ -69,7 +69,7 @@ Without f41f8801, CPU 0's LAPIC timer is left masked in one-shot mode by calibra
 (LVT 0x10030) and CPU 0's clock is the PIT, by upstream design.
 
 ## Fallback API
-Not configured (no key stored). See docs/API_AND_TOOLS.md.
+Groq configured, tested 2026-10-29 (openai/gpt-oss-120b answered OK). See docs/API_AND_TOOLS.md.
 
 ## Not started
 NVMe driver, RTL8125 driver, UEFI boot on the real machine, display/input, GPU, Wayland, install.
