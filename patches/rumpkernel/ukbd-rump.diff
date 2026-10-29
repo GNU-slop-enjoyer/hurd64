@@ -1,6 +1,6 @@
 Description: rump component for USB keyboards (uhidev, ukbd)
  wskbd attaches from libwscons; lets a rump client read keys from /dev/wskbd0.
-Author: tuxhurd
+Author: Hurd64
 
 diff -Nru a/buildrump.sh/src/sys/rump/dev/lib/libukbd/Makefile b/buildrump.sh/src/sys/rump/dev/lib/libukbd/Makefile
 --- a/buildrump.sh/src/sys/rump/dev/lib/libukbd/Makefile	1970-01-01 01:00:00.000000000 +0100

@@ -1,5 +1,5 @@
 #!/bin/sh
-# install.sh [-n] IMAGE ESP.tar : put tuxhurd on the tuxdisk target (the one NVMe disk tuxdisk
+# install.sh [-n] IMAGE ESP.tar : put Hurd64 on the tuxdisk target (the one NVMe disk tuxdisk
 #   accepts, chosen by serial). Wipes the disk. -n only prints what would run.
 #   p1 swap (from the image), p2 root ext2 grown to 32 GiB, p3 EFI system partition 512 MiB.
 set -e
@@ -19,7 +19,7 @@ start=1953792, size=67108864, type=83
 start=69062656, size=1048576, type=ef, bootable
 P
 $T resizefs 2
-$T mkfs vfat 3 TUXHURD
+$T mkfs vfat 3 HURD64
 $T put 3 < "$ESP"
 $T umount all
 $T fsck 2

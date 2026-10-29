@@ -9,7 +9,7 @@ tuxmin was wiped, with the user's OK.
 |---|---|---|
 | p1 | 953 MiB | swap |
 | p2 | 32 GiB | root, ext2 (Debian GNU/Hurd amd64 2026-03-14 + Hurd 20261028 packages + patches) |
-| p3 | 512 MiB | EFI system partition, FAT32, label TUXHURD: EFI/BOOT/BOOTX64.EFI (GRUB, config built in: gnumach-fb.gz, gfxpayload=keep), gnumach-fb.gz, acpi-efi.static (gnumach-efi.gz is the older serial-console kernel, unused) |
+| p3 | 512 MiB | EFI system partition, FAT32, label HURD64: EFI/BOOT/BOOTX64.EFI (GRUB, config built in: gnumach-fb.gz, gfxpayload=keep), gnumach-fb.gz, acpi-efi.static (gnumach-efi.gz is the older serial-console kernel, unused) |
 
 Made by `install/install.sh vm/install.raw vm/esp-install.tar`. install.raw = `qemu-img convert`
 of the VM layer prepared-install.qcow2. ESP = `vm/mkesp.sh vm/efi/grub-install.cfg esp-install`.
@@ -22,7 +22,7 @@ EFI/BOOT/BOOTX64.EFI. Linux on the other disk is untouched.
 
 ## Known limits on the real machine
 - The kernel console draws on the UEFI framebuffer (patches/gnumach/fbcon): boot messages and
-  a "tuxhurd console login:" prompt. Hurd's own console client (VGA text) shows nothing on real
+  a "hurd64 console login:" prompt. Hurd's own console client (VGA text) shows nothing on real
   UEFI hardware; log in at the console prompt. Checked in QEMU/OVMF only.
 - No driver for the RTL8125 yet (rumpnet only has wm), so no network.
 - USB keyboards need firmware PS/2 emulation; untested.

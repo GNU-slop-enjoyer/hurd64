@@ -72,7 +72,7 @@ while copying: suspect the cross-CPU pmap/TLB shootdown on x86_64 (i386/intel/pm
 signal_cpus, cpus_active handling, and PCID if used). NEXT: read that code, write a small C stress test
 (threads on all CPUs writing to a pipe/file while another thread mmaps/munmaps) to reproduce fast.
 Then iGPU (Granite Ridge), then Wayland. Realtek rge is built in but untested.
-Earlier: PC-shaped VM, vm/run-pc.sh: boots to "tuxhurd console login:" with root ld2 behind a PCIe
+Earlier: PC-shaped VM, vm/run-pc.sh: boots to "Hurd64 console login:" with root ld2 behind a PCIe
 root port, e1000e behind a root port with DHCP + ssh, no PS/2. Fixes: ppb-rump.diff (rumpkernel -10tux2,
 rumpdisk-nvme.static + rumpnet relinked), gnumach no-i8042 (kdinit + PS/2 mouse open). NEXT: USB keyboard
 (ukbd-rump.diff -> rumpkernel -10tux3, build tuxkbd, inittab), then quiet the autoconf spam.
@@ -84,7 +84,7 @@ RELINK rumpdisk-nvme.static and rumpnet(.static) against them (static libs!), te
 Fix order: a) ppb in rump pci (ppb-rump.diff: libpci SRCS += ppb.c, PCI.ioconf `ppb* at pci?` +
 `pci* at ppb? bus ?`), check IRQs behind bridges; b) quiet autoconf; c) USB keyboard. PLAN: rump component libukbd (uhidev.c ukbd.c + dev/hid parser; ioconf
 `uhidev* at uhub? port ? configuration ? interface ?`, `ukbd* at uhidev? reportid ?`, `wskbd* at ukbd? console ? mux ?`;
-xhci is already in libpci_usbhc, wskbd in libwscons). C daemon tuxkbd (in tuxhurd/utils): links rump +
+xhci is already in libpci_usbhc, wskbd in libwscons). C daemon tuxkbd (in Hurd64/utils): links rump +
 pci_usbhc + usb + ukbd + wscons like rumpdisk, rump_sys_open("/dev/wskbd0"), read wscons_event, US layout +
 shift/ctrl/caps -> bytes into a pty master whose slave runs /bin/login; pty output -> /dev/console (kdfb).
 Replace the console getty with it (inittab).
@@ -152,7 +152,7 @@ Item 6: install wipes tuxmin; show the plan and get the user's OK first.
    the unstripped build.
 3. >3.5 GB RAM I/O error in rumpdisk (DMA address limit).
 4. NVMe for rumpdisk (NetBSD nvme(4)), rge(4) for the RTL8125.
-5. Published: https://github.com/GNU-slop-enjoyer/tuxhurd (public, user approved 2026-10-28). Push after each verified step.
+5. Published: https://github.com/GNU-slop-enjoyer/Hurd64 (public, user approved 2026-10-28). Push after each verified step.
 6. Install decision (user, 2026-10-29): may wipe tuxmin (Netac ...205715) and install WITHOUT asking again, once the image passes boot + disk tests from NVMe in the VM. RAM budget while the user is away: up to 25 GB, never freeze the host.
 7. Free API: Groq works (openai/gpt-oss-120b, tested 2026-10-29). `freellm models groq` for ids.
 

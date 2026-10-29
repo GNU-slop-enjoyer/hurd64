@@ -1,5 +1,5 @@
 Description: rump component for NetBSD's rge(4), Realtek RTL8125 2.5GbE
-Author: tuxhurd
+Author: Hurd64
 
 diff -Nru a/buildrump.sh/src/sys/rump/dev/lib/libpci_if_rge/Makefile b/buildrump.sh/src/sys/rump/dev/lib/libpci_if_rge/Makefile
 --- a/buildrump.sh/src/sys/rump/dev/lib/libpci_if_rge/Makefile	1970-01-01 01:00:00.000000000 +0100

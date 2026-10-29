@@ -23,17 +23,17 @@ if [ "${1:-}" = undo ]; then
 	exit 0
 fi
 cat > "$mod" <<'EOF'
-# tuxhurd GPU port: iGPU for VMs (gpu/igpu-vfio.sh; "undo" removes this)
+# Hurd64 GPU port: iGPU for VMs (gpu/igpu-vfio.sh; "undo" removes this)
 options vfio-pci ids=1002:13c0
 softdep amdgpu pre: vfio-pci
 EOF
 cat > "$rules" <<EOF
-# tuxhurd GPU port (gpu/igpu-vfio.sh)
+# Hurd64 GPU port (gpu/igpu-vfio.sh)
 SUBSYSTEM=="vfio", OWNER="$user", MODE="0600"
 EOF
 mkdir -p /etc/security/limits.d
 cat > "$limits" <<EOF
-# tuxhurd GPU port (gpu/igpu-vfio.sh): QEMU with VFIO pins guest RAM
+# Hurd64 GPU port (gpu/igpu-vfio.sh): QEMU with VFIO pins guest RAM
 $user soft memlock 8388608
 $user hard memlock 8388608
 EOF

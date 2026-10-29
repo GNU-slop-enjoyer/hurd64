@@ -147,7 +147,7 @@ static void draw_bar(void)
 {
 	fill(0, 0, scr.width, BAR_H, C_BAR);
 	int y = (BAR_H - GH) / 2;
-	int x = text(10, y, "tuxhurd", C_BAR_TEXT, 200) + 20;
+	int x = text(10, y, "Hurd64", C_BAR_TEXT, 200) + 20;
 
 	int right = scr.width - 10 - (int)strlen(clock_text) * GW;
 	text(right, y, clock_text, C_BAR_TEXT, 200);

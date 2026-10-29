@@ -12,7 +12,7 @@ sleep 55
 ./wait-ssh.sh
 SCP="scp -q -i id_hurd -P 2222 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
 $SCP "$K" root@127.0.0.1:/boot/gnumach-tux-smp.gz
-$SCP ../tuxhurd/utils/smpctl.c root@127.0.0.1:/root/
+$SCP ../hurd64/utils/smpctl.c root@127.0.0.1:/root/
 ./ssh.sh 'set -e
 gcc -O2 -Wall -o /usr/local/sbin/smpctl /root/smpctl.c
 awk "/^menuentry .Debian GNU\/Hurd GNU\/Hurd/{p=1} p{print} p&&/^}/{exit}" /boot/grub/grub.cfg |

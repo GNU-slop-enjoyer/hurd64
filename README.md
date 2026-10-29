@@ -1,4 +1,4 @@
-# tuxhurd
+# Hurd64
 
 Work toward a 64-bit, multicore GNU/Hurd that runs on real x86-64 hardware.
 GNU Mach and the Hurd stay the foundation. Upstream sources are used as-is
