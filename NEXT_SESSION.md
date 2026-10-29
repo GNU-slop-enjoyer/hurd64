@@ -36,7 +36,13 @@ ext2fs mitigation (2026-10-30): an idle boot + clean poweroff leaves 3 "deleted 
 with FSCKFIX=yes, so it repairs itself and never stops in a maintenance shell (2 boots tested).
 Root cause (processes still running when ext2fs syncs at shutdown) is still open.
 DISK REINSTALLED 2026-10-30 from install4.raw = PC-VM-tested image (USB keyboard login, quiet console).
-NEXT: SMP hang (item 1), then iGPU (Granite Ridge), then Wayland. Realtek rge is built in but untested.
+SMP retest 2026-10-30 (ncpus=4 kernel with all fixes, ESP vm/esp-smp, `ESPDIR=esp-smp vm/run-pc.sh 4` + smpctl):
+stress2 run 1 => hundreds of `cp: error writing ...: (os/kern) invalid address` (KERN_INVALID_ADDRESS on
+io_write data), then a hang. So with several active CPUs, a task's memory looks unmapped to the kernel
+while copying: suspect the cross-CPU pmap/TLB shootdown on x86_64 (i386/intel/pmap.c: pmap_update_interrupt,
+signal_cpus, cpus_active handling, and PCID if used). NEXT: read that code, write a small C stress test
+(threads on all CPUs writing to a pipe/file while another thread mmaps/munmaps) to reproduce fast.
+Then iGPU (Granite Ridge), then Wayland. Realtek rge is built in but untested.
 Earlier: PC-shaped VM, vm/run-pc.sh: boots to "tuxhurd console login:" with root ld2 behind a PCIe
 root port, e1000e behind a root port with DHCP + ssh, no PS/2. Fixes: ppb-rump.diff (rumpkernel -10tux2,
 rumpdisk-nvme.static + rumpnet relinked), gnumach no-i8042 (kdinit + PS/2 mouse open). NEXT: USB keyboard
