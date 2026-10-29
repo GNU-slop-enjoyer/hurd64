@@ -48,25 +48,22 @@ Conclusions so far:
   Suspects: cross-CPU signalling (TLB shootdown IPIs, cause_ast_check / idle wakeup) and
   ncpus-sized kernel memory (ncpus=64 fails much faster than ncpus=4).
 
-## The hang, as seen in kdb (2026-10-29)
-Every hang dump has the same shape:
-- A runnable kernel thread (`io_done`, `R..ON.P`) is on **no run queue** (thread->runq == 0).
-- CPU 0 (default pset): `state = PROCESSOR_DISPATCHING`, `next_thread` = that thread.
-  CPU 0 runs its own `idle/0`, stopped right after `hlt` in idle_thread_continue.
-- APs 1-3: PROCESSOR_IDLE, in slave_pset (parked).
-- ext2fs and netdde threads sleep in gsync_wait behind the stuck I/O completion.
-- CPU 0 does get clock ticks (elapsed_ticks +403 in ~4 s).
+## The hang, as seen in kdb (2026-10-29, corrected)
+- Stuck: ext2fs threads (and netdde threads) asleep in `gsync_wait` (userspace locks), nobody
+  waking them. All CPUs idle. Happens as soon as a second CPU exists, even with APs parked.
+- NOT stuck: the `io_done` kernel thread. Earlier dumps showed CPU 0 `DISPATCHING` with
+  next_thread = io_done; counters (patches/gnumach/idle-dbg-EXPERIMENT) show CPU 0's idle loop
+  exits ~80x/s, each time a CPU0->CPU0 handoff of io_done, no IPI. Entering kdb by keyboard
+  completes console I/O and wakes io_done in the same interrupt, so the snapshot always caught
+  it mid-handoff. That earlier conclusion was an observation artifact.
+- CPU 0 gets clock ticks (elapsed_ticks advances).
 
-So CPU 0 is handed a thread and keeps going back to sleep. Tried, none fixes it:
-
-| Change (patches/gnumach/) | Result |
+Kernel changes tried (patches/gnumach/), none fixes the hang:
+| Change | Result |
 |---|---|
-| idle-race: check for work with interrupts off, then `sti; hlt` | still hangs (kept, it closes a real window) |
-| bsp-lapic-timer: re-apply upstream f41f8801 (reverted upstream in ddb0766a; LAPIC timer on CPU 0 too) | still hangs; CPU 0 timer then periodic and counting |
-| idle-reread EXPERIMENT: re-read current_processor() every loop pass | still hangs, so a clobbered register is not it |
-
-Without f41f8801, CPU 0's LAPIC timer is left masked in one-shot mode by calibrate_lapic_timer
-(LVT 0x10030) and CPU 0's clock is the PIT, by upstream design.
+| idle-race: check for work with interrupts off, then `sti; hlt` | still hangs (kept: closes a real window) |
+| bsp-lapic-timer: re-apply f41f8801 (reverted upstream, ddb0766a) | still hangs |
+| idle-reread EXPERIMENT | still hangs |
 
 ## Fallback API
 Groq configured, tested 2026-10-29 (openai/gpt-oss-120b answered OK). See docs/API_AND_TOOLS.md.

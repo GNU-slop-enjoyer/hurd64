@@ -1,0 +1,87 @@
+From 2486d2fd29c5a361746132574457fb21d766de98 Mon Sep 17 00:00:00 2001
+From: GNU-slop-enjoyer <johnepstein420@gmail.com>
+Date: Thu, 29 Oct 2026 12:35:13 +0100
+Subject: [PATCH] DEBUG: idle loop and handoff counters for kdb
+
+---
+ kern/sched_prim.c | 22 ++++++++++++++++++++++
+ 1 file changed, 22 insertions(+)
+
+diff --git a/kern/sched_prim.c b/kern/sched_prim.c
+index 833822b0..f3509b67 100644
+--- a/kern/sched_prim.c
++++ b/kern/sched_prim.c
+@@ -59,6 +59,16 @@
+ 
+ #if	MACH_FIXPRI
+ #include <mach/policy.h>
++
++/* DEBUG (tux/idle-dbg): read these from kdb on a hang */
++volatile unsigned long dbg_idle_iter[NCPUS], dbg_idle_exit[NCPUS];
++volatile thread_t dbg_idle_seen[NCPUS];
++volatile processor_t dbg_idle_proc[NCPUS];
++volatile unsigned long dbg_handoff_n;
++volatile int dbg_handoff_from, dbg_handoff_ipi;
++volatile processor_t dbg_handoff_to;
++volatile thread_t dbg_handoff_th;
++
+ #endif	/* MACH_FIXPRI */
+ 
+ int		min_quantum;	/* defines max context switch rate */
+@@ -1284,6 +1294,8 @@ void thread_setrun(
+ 			        processor_t, processor_queue);
+ 			    pset->idle_count--;
+ 			    processor->next_thread = th;
++		    dbg_handoff_n++; dbg_handoff_from = cpu_number(); dbg_handoff_to = processor;
++		    dbg_handoff_th = th; dbg_handoff_ipi = processor != current_processor();
+ 			    processor->state = PROCESSOR_DISPATCHING;
+ 			    pset_idle_unlock();
+ 			    processor_unlock(processor);
+@@ -1304,6 +1316,8 @@ void thread_setrun(
+ 				processor_queue);
+ 		    pset->idle_count--;
+ 		    processor->next_thread = th;
++		    dbg_handoff_n++; dbg_handoff_from = cpu_number(); dbg_handoff_to = processor;
++		    dbg_handoff_th = th; dbg_handoff_ipi = processor != current_processor();
+ 		    processor->state = PROCESSOR_DISPATCHING;
+ 		    pset_idle_unlock();
+ 		    if (processor != current_processor())
+@@ -1343,6 +1357,8 @@ void thread_setrun(
+ 			processor_t, processor_queue);
+ 		    pset->idle_count--;
+ 		    processor->next_thread = th;
++		    dbg_handoff_n++; dbg_handoff_from = cpu_number(); dbg_handoff_to = processor;
++		    dbg_handoff_th = th; dbg_handoff_ipi = processor != current_processor();
+ 		    processor->state = PROCESSOR_DISPATCHING;
+ 		    pset_idle_unlock();
+ 		    processor_unlock(processor);
+@@ -1376,6 +1392,8 @@ void thread_setrun(
+ 		processor_t, processor_queue);
+ 	    default_pset.idle_count--;
+ 	    processor->next_thread = th;
++		    dbg_handoff_n++; dbg_handoff_from = cpu_number(); dbg_handoff_to = processor;
++		    dbg_handoff_th = th; dbg_handoff_ipi = processor != current_processor();
+ 	    processor->state = PROCESSOR_DISPATCHING;
+ 	    return;
+ 	}
+@@ -1666,6 +1684,9 @@ static void __attribute__((noreturn)) idle_thread_continue(void)
+  */
+ 		while ((*threadp == (volatile thread_t)THREAD_NULL) &&
+ 		       (*gcount == 0) && (*lcount == 0)) {
++			dbg_idle_iter[mycpu]++;
++			dbg_idle_seen[mycpu] = *threadp;
++			dbg_idle_proc[mycpu] = myprocessor;
+ 
+ 			/* check for ASTs while we wait */
+ 
+@@ -1700,6 +1721,7 @@ static void __attribute__((noreturn)) idle_thread_continue(void)
+ 		MARK_CPU_ACTIVE(mycpu);
+ #endif	/* MARK_CPU_ACTIVE */
+ 
++		dbg_idle_exit[mycpu]++;
+ 		s = splsched();
+ 
+ 		/*
+-- 
+2.55.0
+
