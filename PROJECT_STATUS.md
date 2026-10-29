@@ -100,5 +100,16 @@ Test setup: SeaBIOS cannot boot NVMe, so GRUB boots from an AHCI copy (bootstub.
 root is the NVMe disk. The build layer prepared-nvme.qcow2 also got Debian's newer `hurd`
 package (0.9.git20261028-2) as a dependency, so the stall may come from that and not from NVMe.
 
+## UEFI boot (item 5), 2026-10-29: pass in QEMU/OVMF
+| Step | Result | Evidence |
+|---|---|---|
+| GRUB EFI from FAT ESP | pass | vm/mkesp.sh: standalone BOOTX64.EFI with vm/efi/grub.cfg |
+| GNU Mach via multiboot2 | pass after fix | upstream panicked: biosmem_bootalloc "unable to allocate memory" (heap search bounded by mem_upper). Fix patches/gnumach/efi-heap uses the memory map |
+| ACPI RSDP on UEFI | pass after fix | upstream acpi server scans the BIOS area ("A valid RSDP was not found"). Fix patches/hurd/acpi-efi walks the EFI config table via host_info(HOST_EFI_SYSTAB): `ACPI: RSDP 0xBFB7E014 (v02 BOCHS)` |
+| Root on NVMe, no BIOS disk | pass | /dev/ld0, ld0s1, ld0s2 storeio nodes; fstab uses /dev/ld0s2 (wd0s2 made fsck fail) |
+| Full system | pass | `FW=efi BUS=nvme NVME_ADDR=0x6 vm/run.sh 2`: ssh, 300 MB dd 377 MB/s, apt-get update, stress2 2/2 |
+
+Known: kernel console is still console=com0 (serial). The real machine needs a framebuffer console.
+
 ## Not started
 NVMe driver, RTL8125 driver, UEFI boot on the real machine, display/input, GPU, Wayland, install.

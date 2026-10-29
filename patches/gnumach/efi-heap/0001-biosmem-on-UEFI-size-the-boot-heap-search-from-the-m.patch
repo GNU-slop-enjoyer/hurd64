@@ -1,0 +1,43 @@
+From 97eebb85ece72383ab4b9ebc0fa996e042457ab8 Mon Sep 17 00:00:00 2001
+From: GNU-slop-enjoyer <johnepstein420@gmail.com>
+Date: Thu, 29 Oct 2026 15:59:33 +0100
+Subject: [PATCH] biosmem: on UEFI, size the boot heap search from the memory
+ map
+
+mem_upper only covers memory up to the first hole above 1 MiB. Under
+OVMF that span is nearly all kernel and modules and the boot
+allocator panics (biosmem_bootalloc: unable to allocate memory).
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ i386/i386at/biosmem.c | 14 ++++++++++++++
+ 1 file changed, 14 insertions(+)
+
+diff --git a/i386/i386at/biosmem.c b/i386/i386at/biosmem.c
+index b6887eff..adf17c0d 100644
+--- a/i386/i386at/biosmem.c
++++ b/i386/i386at/biosmem.c
+@@ -638,6 +638,20 @@ biosmem_setup_allocator(const uint32_t mem_upper)
+      */
+     end = vm_page_trunc((mem_upper + 1024) << 10);
+ 
++    /*
++     * mem_upper only counts memory up to the first hole above 1 MiB. On
++     * UEFI machines the firmware keeps regions low in memory, so that span
++     * can be almost entirely kernel and modules. The memory map knows
++     * better: search up to the end of the highest available entry.
++     */
++    for (unsigned int i = 0; i < biosmem_map_size; i++) {
++        const struct biosmem_map_entry *entry = &biosmem_map[i];
++        phys_addr_t entry_end = entry->base_addr + entry->length;
++
++        if ((entry->type == BIOSMEM_TYPE_AVAILABLE) && (entry_end > end))
++            end = vm_page_trunc(entry_end);
++    }
++
+     if (end > VM_PAGE_DIRECTMAP_LIMIT)
+         end = VM_PAGE_DIRECTMAP_LIMIT;
+ 
+-- 
+2.55.0
+

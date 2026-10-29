@@ -1,0 +1,181 @@
+From d0a5c2baadb8ecce1a19da511641e8a3841ccee9 Mon Sep 17 00:00:00 2001
+From: GNU-slop-enjoyer <johnepstein420@gmail.com>
+Date: Thu, 29 Oct 2026 16:06:13 +0100
+Subject: [PATCH] acpi: find the RSDP through the EFI system table on UEFI
+ machines
+
+ACPICA scans the BIOS area for the RSDP, which UEFI firmware need not
+provide. GNU Mach reports the EFI system table through host_info
+(HOST_EFI_SYSTAB); walk its configuration table for the ACPI 2.0 or
+1.0 entry and fall back to the BIOS scan when there is none.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ acpi/Makefile |   4 +-
+ acpi/efi.c    | 133 ++++++++++++++++++++++++++++++++++++++++++++++++++
+ 2 files changed, 136 insertions(+), 1 deletion(-)
+ create mode 100644 acpi/efi.c
+
+diff --git a/acpi/Makefile b/acpi/Makefile
+index 6e91e980..b20af3fe 100644
+--- a/acpi/Makefile
++++ b/acpi/Makefile
+@@ -22,13 +22,15 @@ PORTDIR = $(srcdir)/port
+ 
+ SRCS           = main.c netfs_impl.c acpi.c \
+                  acpifs.c ncache.c options.c func_files.c acpi-ops.c \
+-                 acpiServer.c startup_notifyServer.c
++                 acpiServer.c startup_notifyServer.c efi.c
+ 
+ MIGSRCS        =
+ OBJS           = $(patsubst %.S,%.o,$(patsubst %.c,%.o, $(SRCS) $(MIGSRCS)))
+ 
+ HURDLIBS= fshelp ports shouldbeinlibc netfs iohelp ihash machdev trivfs irqhelp
+ LDLIBS = -lpthread $(libacpica_LIBS)
++# efi.c finds the RSDP through the EFI system table before ACPICA scans the BIOS area
++LDFLAGS += -Wl,--wrap=acpi_os_get_root_pointer
+ 
+ target = acpi acpi.static
+ 
+diff --git a/acpi/efi.c b/acpi/efi.c
+new file mode 100644
+index 00000000..843cc6c3
+--- /dev/null
++++ b/acpi/efi.c
+@@ -0,0 +1,133 @@
++/*
++   Copyright (C) 2026 Free Software Foundation, Inc.
++
++   This file is part of the GNU Hurd.
++
++   The GNU Hurd is free software; you can redistribute it and/or
++   modify it under the terms of the GNU General Public License as
++   published by the Free Software Foundation; either version 2, or (at
++   your option) any later version.
++
++   The GNU Hurd is distributed in the hope that it will be useful, but
++   WITHOUT ANY WARRANTY; without even the implied warranty of
++   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
++   General Public License for more details.
++
++   You should have received a copy of the GNU General Public License
++   along with the GNU Hurd.  If not, see <http://www.gnu.org/licenses/>.
++*/
++
++/* Find the ACPI RSDP on UEFI machines.
++
++   ACPICA's own lookup scans the BIOS area below 1 MiB, which UEFI firmware
++   does not have to provide.  There the RSDP is listed in the EFI
++   configuration table instead.  GNU Mach reports the EFI system table's
++   physical address through host_info (HOST_EFI_SYSTAB); this file walks
++   that table and is linked in front of acpi_os_get_root_pointer with
++   -Wl,--wrap, so ACPICA and acpi.c both get the EFI answer when there is
++   one and the BIOS scan otherwise.  */
++
++#include <mach.h>
++#include <mach/host_info.h>
++#include <stdint.h>
++#include <string.h>
++
++#include "myacpi.h"
++
++#define __KERNEL__
++#include <acpi/acpi.h>
++
++#ifdef HOST_EFI_SYSTAB
++
++/* x86_64 EFI_SYSTEM_TABLE: NumberOfTableEntries and ConfigurationTable,
++   after the 24-byte header and eleven pointer-sized fields.  */
++#define EFI_ST_NR_TABLES	0x68
++#define EFI_ST_CONFIG_TABLE	0x70
++#define EFI_ST_SIZE		0x78
++
++/* EFI_CONFIGURATION_TABLE: a GUID, then a pointer.  */
++struct efi_guid
++{
++  uint32_t a;
++  uint16_t b, c;
++  uint8_t d[8];
++};
++
++struct efi_config_table
++{
++  struct efi_guid guid;
++  uint64_t table;
++};
++
++static const struct efi_guid acpi20_guid =
++  { 0x8868e871, 0xe4f1, 0x11d3, { 0xbc, 0x22, 0x00, 0x80, 0xc7, 0x3c, 0x88, 0x81 } };
++static const struct efi_guid acpi10_guid =
++  { 0xeb9d2d30, 0x2d88, 0x11d3, { 0x9a, 0x16, 0x00, 0x90, 0x27, 0x3f, 0xc1, 0x4d } };
++
++/* Far more than any firmware lists.  */
++#define MAX_TABLES 256
++
++static acpi_physical_address
++efi_find_rsdp (void)
++{
++  host_efi_systab_data_t systab;
++  mach_msg_type_number_t count = HOST_EFI_SYSTAB_COUNT;
++
++  if (host_info (mach_host_self (), HOST_EFI_SYSTAB,
++		 (host_info_t) &systab, &count) != KERN_SUCCESS
++      || systab == HOST_NO_UEFI || systab == 0)
++    return 0;
++
++  uint8_t *st = acpi_os_map_memory (systab, EFI_ST_SIZE);
++  if (!st)
++    return 0;
++  uint64_t nr, config;
++  memcpy (&nr, st + EFI_ST_NR_TABLES, sizeof nr);
++  memcpy (&config, st + EFI_ST_CONFIG_TABLE, sizeof config);
++  acpi_os_unmap_memory (st, EFI_ST_SIZE);
++
++  if (nr == 0 || nr > MAX_TABLES || config == 0)
++    return 0;
++
++  acpi_size size = nr * sizeof (struct efi_config_table);
++  struct efi_config_table *tables = acpi_os_map_memory (config, size);
++  if (!tables)
++    return 0;
++
++  /* Prefer the ACPI 2.0 RSDP, which also carries the XSDT.  */
++  acpi_physical_address rsdp10 = 0, rsdp20 = 0;
++  for (uint64_t i = 0; i < nr; i++)
++    {
++      if (!memcmp (&tables[i].guid, &acpi20_guid, sizeof acpi20_guid))
++	rsdp20 = tables[i].table;
++      else if (!memcmp (&tables[i].guid, &acpi10_guid, sizeof acpi10_guid))
++	rsdp10 = tables[i].table;
++    }
++  acpi_os_unmap_memory (tables, size);
++
++  return rsdp20 ? rsdp20 : rsdp10;
++}
++
++#else  /* HOST_EFI_SYSTAB */
++
++static acpi_physical_address
++efi_find_rsdp (void)
++{
++  return 0;
++}
++
++#endif /* HOST_EFI_SYSTAB */
++
++acpi_physical_address __real_acpi_os_get_root_pointer (void);
++
++acpi_physical_address
++__wrap_acpi_os_get_root_pointer (void)
++{
++  static acpi_physical_address rsdp;
++
++  if (!rsdp)
++    rsdp = efi_find_rsdp ();
++  if (!rsdp)
++    rsdp = __real_acpi_os_get_root_pointer ();
++  return rsdp;
++}
+-- 
+2.55.0
+
