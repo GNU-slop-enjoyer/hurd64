@@ -75,7 +75,8 @@ Groq configured, tested 2026-10-29 (openai/gpt-oss-120b answered OK). See docs/A
 | NVMe rump components | available | Debian rumpkernel 0~20250111-10 (debian-ports) ships librumpdev_nvme, _ld, _ld_nvme |
 | rumpdisk with NVMe | built | patches/hurd/rumpdisk-nvme: links rumpdev_ld/nvme/ld_nvme, accepts `ld*` names |
 | NVMe attach + root mount | **pass** | QEMU nvme device: `nvme0: NVMe 1.4`, `ld0 at nvme0 nsid 1`, `ext2fs[part:2:device:ld0]` bootstrapped |
-| Full boot with root on NVMe | **FAIL** (stall) | stops at "Configuring network interfaces" (dhclient); serial and disk stop changing 11 s after start; CPU halted with IF=1 |
+| Full boot with root on NVMe | **pass** (2026-10-29) | networking via rumpnet (/dev/net -> rumpnet, /dev/wm0, interfaces uses /dev/wm0); NVMe alone on its IRQ. DHCP at boot, ssh, apt-get update over the Internet, 300 MB dd at 332 MB/s, stress2 2/2 |
+| NVMe sharing an IRQ with AHCI | FAIL (freeze) | open bug: when NVMe and AHCI share a line inside rumpdisk, starting another PCI driver freezes the system; see lead below |
 
 Stall narrowed down (2026-10-29):
 - Same layer and new hurd package, root on AHCI (IRQ 10, e1000 on IRQ 11): boots to login.

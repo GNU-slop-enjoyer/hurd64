@@ -21,7 +21,8 @@
 then GPU on the Granite Ridge iGPU only, then Wayland.
 
 ## Current item: 3 (NVMe), then 4-6. Item 1 (SMP hang) is parked; item 2 is done for AHCI/NVMe.
-Item 3 next: the stall after `entropy: best effort` in rumpdisk's rump kernel with NVMe loaded.
+Item 3: WORKS in the VM (see PROJECT_STATUS.md). Remaining bug: NVMe+AHCI sharing an IRQ line freezes on the next PCI driver start (device/intr.c masking lead). Old notes:
+  the stall after `entropy: best effort` in rumpdisk's rump kernel with NVMe loaded.
   a. Done: AHCI root on the same layer boots, so the hurd package isn't it. A shared IRQ
      with the NIC isn't the whole cause (see PROJECT_STATUS.md).
   a2. Read NetBSD sys/kern/kern_entropy.c (rumpkernel tree) for what prints "best effort" and
