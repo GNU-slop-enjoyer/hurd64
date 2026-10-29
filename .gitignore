@@ -5,3 +5,4 @@
 serial.log
 qemu.log
 id_hurd*
+vm/vmctl

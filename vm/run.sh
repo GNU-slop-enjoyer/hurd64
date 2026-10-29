@@ -1,7 +1,7 @@
 #!/bin/sh
 # Hurd test VM. RAM and CPUs are capped so the host stays usable.
 #   [DISK=x.qcow2] [MEM=2G] ./run.sh [cpus]     default work.qcow2, 2G, 4 CPUs
-#   monitor: mon.sock (mon.sh)  serial: ser.sock (ser.py), logged to serial.log  ssh: ssh.sh
+#   monitor: mon.sock (mon.sh)  serial: ser.sock (ser.sh), logged to serial.log  ssh: ssh.sh
 cd "$(dirname "$0")"
 # BUS=ahci puts the disk on an AHCI (SATA) controller, BUS=nvme on an NVMe controller, instead of IDE
 D="${DISK:-work.qcow2}"

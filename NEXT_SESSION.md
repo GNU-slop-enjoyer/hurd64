@@ -63,7 +63,7 @@ Item 6: install wipes tuxmin; show the plan and get the user's OK first.
 3. >3.5 GB RAM I/O error in rumpdisk (DMA address limit).
 4. NVMe for rumpdisk (NetBSD nvme(4)), rge(4) for the RTL8125.
 5. Published: https://github.com/GNU-slop-enjoyer/tuxhurd (public, user approved 2026-10-28). Push after each verified step.
-6. Install decision (user, 2026-10-28): wipe tuxmin and give Hurd the whole Netac ...205715 disk. Still show the exact plan and get a final OK right before writing.
+6. Install decision (user, 2026-10-29): may wipe tuxmin (Netac ...205715) and install WITHOUT asking again, once the image passes boot + disk tests from NVMe in the VM. RAM budget while the user is away: up to 25 GB, never freeze the host.
 7. Free API: Groq works (openai/gpt-oss-120b, tested 2026-10-29). `freellm models groq` for ids.
 
-Limits: builds -j8 at most on the host, -j4 in the VM; VM 2 GB RAM.
+Limits: builds -j8 max on the host; RAM up to 25 GB total (user, 2026-10-29). No Python anywhere (user): C for tools, sh for glue. vm/vmctl.c replaces the old Python helpers (build: gcc -O2 -o vm/vmctl vm/vmctl.c).
