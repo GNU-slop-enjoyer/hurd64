@@ -31,8 +31,12 @@ from devsw_name2chr("wskbd"). ACPICA tracing off (hurd tux/quiet: acpi main.c). 
 Console cleaned up (2026-10-30): rump AB_SILENT, ACPICA tracing off + libacpica stdout discarded, no per-IRQ
 printf in gnumach (patches/gnumach/quiet-intr), ASCII /etc/motd. vm/rebuild-all.sh rebuilds+installs all.
 Left on screen: Debian rcS "Cleaning up temporary files... failed!" + startpar bootclean failure.
-NEXT: ext2fs leaves fsck errors after clean poweroff (data safety), then SMP, iGPU, Wayland; reinstall disk
-only from the PC-VM-tested image (install/install.sh).
+ext2fs mitigation (2026-10-30): an idle boot + clean poweroff leaves 3 "deleted inode has zero dtime"
+(files unlinked while open, e.g. /run pids, /dev/log). Root fs now checked every boot (tune2fs -c 1 -i 0)
+with FSCKFIX=yes, so it repairs itself and never stops in a maintenance shell (2 boots tested).
+Root cause (processes still running when ext2fs syncs at shutdown) is still open.
+DISK REINSTALLED 2026-10-30 from install4.raw = PC-VM-tested image (USB keyboard login, quiet console).
+NEXT: SMP hang (item 1), then iGPU (Granite Ridge), then Wayland. Realtek rge is built in but untested.
 Earlier: PC-shaped VM, vm/run-pc.sh: boots to "tuxhurd console login:" with root ld2 behind a PCIe
 root port, e1000e behind a root port with DHCP + ssh, no PS/2. Fixes: ppb-rump.diff (rumpkernel -10tux2,
 rumpdisk-nvme.static + rumpnet relinked), gnumach no-i8042 (kdinit + PS/2 mouse open). NEXT: USB keyboard
