@@ -25,7 +25,12 @@ NVMe/NIC/xHCI sit behind PCIe bridges. (2) Hurd reads only the PS/2 keyboard. (3
 RULE NOW: test only on a QEMU machine shaped like the PC: `-machine q35,i8042=off`, devices behind
 pcie-root-port, xHCI + usb-kbd only, UEFI. The user does not want to boot again until it is a usable
 login with a working keyboard. Then continue through all items incl. iGPU + Wayland.
-DONE 2026-10-30 (PC-shaped VM, vm/run-pc.sh): boots to "tuxhurd console login:" with root ld2 behind a PCIe
+DONE 2026-10-30: USB KEYBOARD LOGIN WORKS on the PC-shaped VM (login root, run commands). tuxkbd from inittab
+(c:23 line), rump ukbd (rumpkernel -10tux3), /dev/wskbd had the wrong major so tuxkbd mknods /dev/tuxwskbd0
+from devsw_name2chr("wskbd"). ACPICA tracing off (hurd tux/quiet: acpi main.c). Log: /var/log/tuxkbd.log.
+Remaining for a clean console: motd UTF-8 art shows as garbage (8-bit kd), "Found ..." attach lines from
+tuxkbd's rump, "Found IRQ resource / Final irq" from libacpica glue.
+Earlier: PC-shaped VM, vm/run-pc.sh: boots to "tuxhurd console login:" with root ld2 behind a PCIe
 root port, e1000e behind a root port with DHCP + ssh, no PS/2. Fixes: ppb-rump.diff (rumpkernel -10tux2,
 rumpdisk-nvme.static + rumpnet relinked), gnumach no-i8042 (kdinit + PS/2 mouse open). NEXT: USB keyboard
 (ukbd-rump.diff -> rumpkernel -10tux3, build tuxkbd, inittab), then quiet the autoconf spam.
