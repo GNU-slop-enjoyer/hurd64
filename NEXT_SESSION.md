@@ -16,6 +16,19 @@
   zlib1g-dev uuid-dev libblkid-dev) were installed into work.qcow2 only. Install them into
   prepared.qcow2 instead, or reinstall each boot.
 
+## REAL HARDWARE BOOT (user, 2026-10-30): FAILED, user wants everything fixed before testing again
+Photo: kernel + fb console worked; rumpdisk printed every PCI device "not configured" (spam), then
+`ext2fs: part:2:device:ld2: No such device or address`; no typing (USB keyboard).
+Causes: (1) rump pci only attaches bus 0 (pci_at_mainbus, pba_bus = 0) and has no ppb driver; real
+NVMe/NIC/xHCI sit behind PCIe bridges. (2) Hurd reads only the PS/2 keyboard. (3) autoconf
+"not configured" lines go to the console.
+RULE NOW: test only on a QEMU machine shaped like the PC: `-machine q35,i8042=off`, devices behind
+pcie-root-port, xHCI + usb-kbd only, UEFI. The user does not want to boot again until it is a usable
+login with a working keyboard. Then continue through all items incl. iGPU + Wayland.
+Fix order: a) ppb in rump pci (ppb-rump.diff: libpci SRCS += ppb.c, PCI.ioconf `ppb* at pci?` +
+`pci* at ppb? bus ?`), check IRQs behind bridges; b) quiet autoconf; c) USB keyboard (rump
+usb + ukbd/uhid -> Hurd console input); d) ext2fs fsck errors; e) SMP; f) iGPU; g) Wayland.
+
 ## Order (user, 2026-10-29)
 1 SMP hang, 2 >3.5 GB RAM, 3 NVMe, 4 RTL8125, 5 UEFI boot on the real PC, 6 install (wipes tuxmin, final OK first),
 then GPU on the Granite Ridge iGPU only, then Wayland.
