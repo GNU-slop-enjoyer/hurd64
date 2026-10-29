@@ -85,6 +85,16 @@ Stall narrowed down (2026-10-29):
 - Last console line before every stall: `[6.09] entropy: best effort` from the rump kernel in
   rumpdisk. Serial, disk image and the IRQ 10 count all stop right after it.
 
+Further (same day):
+- With boot-time networking off, NVMe root boots to login in ~15 s; root is writable on
+  part:2:device:ld0, 300 MB dd at 367 MB/s, md5 correct.
+- Opening /dev/eth* (starts netdde) freezes it. Replacing netdde with rumpnet (/dev/net ->
+  /hurd/symlink rumpnet): boot completes, wm0 attaches; but `pfinet -i /dev/wm0` freezes it
+  again. So: NVMe in rumpdisk + a second PCI driver starting = freeze; interrupt counts stop.
+- Lead: device/intr.c masks a line in queue_intr until userspace acks (irq_acknowledge). A
+  shared or never-acked line stays masked and silences NVMe. Check __disable_irq nesting and
+  how rump irqhelp acks when NVMe+AHCI share IRQ 10.
+
 Test setup: SeaBIOS cannot boot NVMe, so GRUB boots from an AHCI copy (bootstub.qcow2) and the
 root is the NVMe disk. The build layer prepared-nvme.qcow2 also got Debian's newer `hurd`
 package (0.9.git20261028-2) as a dependency, so the stall may come from that and not from NVMe.
