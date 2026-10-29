@@ -135,7 +135,6 @@ static void *keyboard(void *arg)
 	struct wscons_event ev[16];
 	for (;;) {
 		ssize_t r = rump_sys_read(fd, ev, sizeof ev);
-		LOG("read %zd\n", r);
 		if (r <= 0) {
 			usleep(10000);
 			continue;
@@ -150,7 +149,6 @@ static void *keyboard(void *arg)
 			case K_LALT: case K_RALT: alt = down; continue;
 			case K_CAPS: if (down) caps = !caps; continue;
 			}
-			LOG("key %d %s\n", ev[i].value, down ? "down" : "up");
 			if (down)
 				key(ev[i].value, shift, ctrl, alt, caps);
 		}
@@ -253,7 +251,7 @@ int main(int argc, char **argv)
 		perror("tuxkbd: pty");
 		return 1;
 	}
-	rump_boot_sethowto(RUMP_AB_QUIET);
+	rump_boot_sethowto(RUMP_AB_SILENT);
 	logf = fopen("/var/log/tuxkbd.log", "a");
 	LOG("tuxkbd starting\n");
 	if (rump_init() != 0) {
