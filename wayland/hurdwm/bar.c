@@ -15,6 +15,8 @@
 #define C_DIM		0xff7b8288
 #define C_SEL		0xff3b4a57
 
+int bar_scale = 1;
+
 /* a wlr_buffer over pixels in memory */
 struct pixbuf {
 	struct wlr_buffer base;
@@ -59,13 +61,16 @@ static void fill(uint32_t *px, int w, int x, int y, int fw, int fh, uint32_t c)
 				px[j * w + i] = c;
 }
 
+/* text in the console font, bar_scale times as big; returns the x after it */
 static int text(uint32_t *px, int w, int x, int y, const char *s, uint32_t c, int maxw)
 {
-	for (; *s && maxw >= 8; s++, x += 8, maxw -= 8) {
+	int z = bar_scale, cw = 8 * z;
+
+	for (; *s && maxw >= cw; s++, x += cw, maxw -= cw) {
 		const unsigned char *g = &font8x16[(unsigned char)*s * 16];
-		for (int r = 0; r < 16; r++)
-			for (int k = 0; k < 8; k++)
-				if ((g[r] & (0x80 >> k)) && x + k < w)
+		for (int r = 0; r < 16 * z; r++)
+			for (int k = 0; k < cw; k++)
+				if ((g[r / z] & (0x80 >> (k / z))) && x + k < w)
 					px[(y + r) * w + x + k] = c;
 	}
 	return x;
@@ -81,6 +86,7 @@ static void now(char out[16])
 void bar_init(struct bar *b, struct wlr_scene_tree *parent, int width)
 {
 	b->width = width;
+	bar_scale = width >= 2560 ? 2 : 1;
 	b->node = wlr_scene_buffer_create(parent, NULL);
 	now(b->clock);
 }
@@ -97,22 +103,22 @@ void bar_draw(struct bar *b, const char **titles, int n, int focused, const char
 	      const char *prompt)
 {
 	struct pixbuf *pb = calloc(1, sizeof *pb);
-	int w = b->width, y = (BAR_HEIGHT - 16) / 2;
+	int w = b->width, z = bar_scale, y = (BAR_HEIGHT - 16 * z) / 2;
 
 	pb->stride = w * 4;
 	pb->px = malloc((size_t)pb->stride * BAR_HEIGHT);
 	wlr_buffer_init(&pb->base, &pb_impl, w, BAR_HEIGHT);
 	fill(pb->px, w, 0, 0, w, BAR_HEIGHT, C_BAR);
-	int x = text(pb->px, w, 10, y, "Hurd64", C_TEXT, 200) + 20;
+	int x = text(pb->px, w, 10 * z, y, "Hurd64", C_TEXT, 200 * z) + 20 * z;
 
 	now(b->clock);
-	int right = w - 10 - (int)strlen(b->clock) * 8;
-	text(pb->px, w, right, y, b->clock, C_TEXT, 100);
+	int right = w - 10 * z - (int)strlen(b->clock) * 8 * z;
+	text(pb->px, w, right, y, b->clock, C_TEXT, 100 * z);
 	if (prompt) {
-		fill(pb->px, w, x, 2, right - 20 - x, BAR_HEIGHT - 4, C_SEL);
-		int e = text(pb->px, w, x + 8, y, "Run: ", C_DIM, right - 28 - x);
-		e = text(pb->px, w, e, y, prompt, C_TEXT, right - 28 - e);
-		fill(pb->px, w, e, y, 8, 16, C_TEXT);	/* the cursor */
+		fill(pb->px, w, x, 2 * z, right - 20 * z - x, BAR_HEIGHT - 4 * z, C_SEL);
+		int e = text(pb->px, w, x + 8 * z, y, "Run: ", C_DIM, right - 28 * z - x);
+		e = text(pb->px, w, e, y, prompt, C_TEXT, right - 28 * z - e);
+		fill(pb->px, w, e, y, 8 * z, 16 * z, C_TEXT);	/* the cursor */
 		n = 0;
 		hint = NULL;
 	}
@@ -120,16 +126,16 @@ void bar_draw(struct bar *b, const char **titles, int n, int focused, const char
 		char label[40];
 		strncpy(label, titles[i], sizeof label - 1);
 		label[sizeof label - 1] = 0;
-		int lw = ((int)strlen(label) + 2) * 8;
-		if (x + lw > right - 20)
+		int lw = ((int)strlen(label) + 2) * 8 * z;
+		if (x + lw > right - 20 * z)
 			break;
 		if (i == focused)
-			fill(pb->px, w, x, 2, lw, BAR_HEIGHT - 4, C_SEL);
-		text(pb->px, w, x + 8, y, label, i == focused ? C_TEXT : C_DIM, lw);
-		x += lw + 4;
+			fill(pb->px, w, x, 2 * z, lw, BAR_HEIGHT - 4 * z, C_SEL);
+		text(pb->px, w, x + 8 * z, y, label, i == focused ? C_TEXT : C_DIM, lw);
+		x += lw + 4 * z;
 	}
 	if (!n && hint)
-		text(pb->px, w, x, y, hint, C_DIM, right - 20 - x);
+		text(pb->px, w, x, y, hint, C_DIM, right - 20 * z - x);
 	wlr_scene_buffer_set_buffer(b->node, &pb->base);
 	wlr_buffer_drop(&pb->base);
 }

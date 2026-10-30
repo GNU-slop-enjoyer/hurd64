@@ -757,6 +757,11 @@ int main(int argc, char **argv)
 		return 1;
 	s.width = s.screen.width;
 	s.height = s.screen.height;
+	/* foot's default font is for small screens */
+	if (!strcmp(s.terminal, "foot") && s.width >= 2560)
+		s.terminal = "foot --font=monospace:size=15";
+	else if (!strcmp(s.terminal, "foot") && s.width >= 1600)
+		s.terminal = "foot --font=monospace:size=11";
 
 	int kfd = keys_open(keys_path);
 	if (kfd < 0)

@@ -4,8 +4,11 @@
 #define BAR_H
 #include <wlr/types/wlr_scene.h>
 
-#define BAR_HEIGHT 24
+#define BAR_HEIGHT (24 * bar_scale)
 #define BAR_MAX_TITLES 16
+
+/* 2 on big screens (2560 pixels wide and more), else 1 */
+extern int bar_scale;
 
 struct bar {
 	struct wlr_scene_buffer *node;
