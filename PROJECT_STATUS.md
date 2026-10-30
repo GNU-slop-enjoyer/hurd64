@@ -116,7 +116,7 @@ See INSTALLATION.md. Verified: partition table, e2fsck -f clean after resize (it
 
 ## RTL8125 (item 4), in progress 2026-10-29
 - patches/rumpkernel/rge-rump.diff: rump component libpci_if_rge (NetBSD if_rge.c, no firmware), added
-  to RUMPPCIDEVS; Debian rumpkernel 0~20250111-10tux1 built in the VM (dpkg-buildpackage, EXIT=0).
+  to RUMPPCIDEVS; Debian rumpkernel 0~20250111-10hurd96.1 built in the VM (dpkg-buildpackage, EXIT=0).
 - Installed on the disk 2026-10-29: new rump libs, rumpnet linking librumpdev_pci_if_rge.so.0,
   /dev/rge0 devnode, `allow-hotplug /dev/rge0` + dhcp. Same image tested in QEMU (3 NVMe, ld2): new
   rumpnet runs wm0 with DHCP, apt-get update, stress2 1/1. rge itself untested (no emulation).
@@ -128,7 +128,7 @@ See INSTALLATION.md. Verified: partition table, e2fsck -f clean after resize (it
 An image taken after a CLEAN poweroff still fails `e2fsck -fn` (exit 4: leaked inodes, wrong free
 counts). Hard VM stops made it worse: one layer later crashed ext2fs (`file_pager_write_pages:
 Assertion blk failed` after "bit already cleared for inode"). install.sh repairs the image before
-writing it (resizefs runs e2fsck -f -y). On the real machine run `sudo tuxdisk fsck 2` from Linux
+writing it (resizefs runs e2fsck -f -y). On the real machine run sudo $DISK_HELPER fsck 2` from Linux
 now and then. Root cause not investigated yet.
 
 ## Not started

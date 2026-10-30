@@ -1,7 +1,7 @@
 Description: attach PCI-PCI bridges (ppb) so devices behind PCIe root ports are found
  Real machines put NVMe, NICs and xHCI behind PCIe root ports; without ppb
  only bus 0 was ever scanned.
-Author: Hurd64
+Author: hurd96
 
 diff -Nru a/buildrump.sh/src/sys/rump/dev/lib/libpci/Makefile b/buildrump.sh/src/sys/rump/dev/lib/libpci/Makefile
 --- a/buildrump.sh/src/sys/rump/dev/lib/libpci/Makefile	2026-10-29 19:03:26.995067147 +0100

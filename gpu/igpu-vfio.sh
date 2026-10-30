@@ -8,14 +8,14 @@
 #   sudo gpu/igpu-vfio.sh undo     back to amdgpu (after a reboot)
 #
 # What it writes:
-#   /etc/modprobe.d/tux-igpu-vfio.conf     vfio-pci claims 1002:13c0 before amdgpu
-#   /etc/udev/rules.d/72-tux-vfio.rules    the user may open /dev/vfio/* (QEMU runs as you)
-#   /etc/security/limits.d/tux-vfio.conf   QEMU may lock the VM's RAM (VFIO pins it): 8 GiB
+#   /etc/modprobe.d/hurd96-igpu-vfio.conf     vfio-pci claims 1002:13c0 before amdgpu
+#   /etc/udev/rules.d/72-hurd96-vfio.rules    the user may open /dev/vfio/* (QEMU runs as you)
+#   /etc/security/limits.d/hurd96-vfio.conf   QEMU may lock the VM's RAM (VFIO pins it): 8 GiB
 set -eu
-user=${SUDO_USER:-tux}
-mod=/etc/modprobe.d/tux-igpu-vfio.conf
-rules=/etc/udev/rules.d/72-tux-vfio.rules
-limits=/etc/security/limits.d/tux-vfio.conf
+user=${SUDO_USER:?run with sudo}
+mod=/etc/modprobe.d/hurd96-igpu-vfio.conf
+rules=/etc/udev/rules.d/72-hurd96-vfio.rules
+limits=/etc/security/limits.d/hurd96-vfio.conf
 [ "$(id -u)" = 0 ] || { echo "run with sudo" >&2; exit 1; }
 if [ "${1:-}" = undo ]; then
 	rm -f "$mod" "$rules" "$limits"
@@ -23,23 +23,23 @@ if [ "${1:-}" = undo ]; then
 	exit 0
 fi
 cat > "$mod" <<'EOF'
-# Hurd64 GPU port: iGPU for VMs (gpu/igpu-vfio.sh; "undo" removes this)
+# hurd96 GPU port: iGPU for VMs (gpu/igpu-vfio.sh; "undo" removes this)
 options vfio-pci ids=1002:13c0
 softdep amdgpu pre: vfio-pci
 EOF
 cat > "$rules" <<EOF
-# Hurd64 GPU port (gpu/igpu-vfio.sh)
+# hurd96 GPU port (gpu/igpu-vfio.sh)
 SUBSYSTEM=="vfio", OWNER="$user", MODE="0600"
 EOF
 mkdir -p /etc/security/limits.d
 cat > "$limits" <<EOF
-# Hurd64 GPU port (gpu/igpu-vfio.sh): QEMU with VFIO pins guest RAM
+# hurd96 GPU port (gpu/igpu-vfio.sh): QEMU with VFIO pins guest RAM
 $user soft memlock 8388608
 $user hard memlock 8388608
 EOF
 # amdgpu inside LKL has no ACPI: keep a copy of the VFCT table (the
 # iGPU's VBIOS) where the build can read it (gpu/vfct-extract.c)
-vfct=/home/$user/src/hurd64/build/lkl/VFCT
+vfct=/home/$user/src/hurd96/build/lkl/VFCT
 if [ -r /sys/firmware/acpi/tables/VFCT ]; then
 	mkdir -p "$(dirname "$vfct")"
 	cp /sys/firmware/acpi/tables/VFCT "$vfct"

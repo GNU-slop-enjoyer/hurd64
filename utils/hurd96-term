@@ -1,0 +1,5 @@
+#!/bin/sh
+# hurd96-term: foot with a font that fits the screen (lilith sets HURD96_SCREEN_WIDTH)
+w=${HURD96_SCREEN_WIDTH:-0}
+if [ "$w" -ge 2560 ]; then s=15; elif [ "$w" -ge 1600 ]; then s=11; else s=9; fi
+exec foot --font="monospace:size=$s" "$@"

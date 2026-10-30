@@ -1,0 +1,14 @@
+#!/bin/sh
+# hurd96-smp: use every CPU, but keep the filesystem servers on one CPU of their own.
+#   ext2fs (and, with more CPUs, other Hurd servers) race when their threads really run in parallel
+#   (invalid-address write errors, then a hang). So first move all Hurd servers onto
+#   the last CPU in a set of their own, and only then let everything else use the rest.
+n=$(/usr/local/sbin/smpctl -s | awk '{print $1}')
+[ "${n:-1}" -gt 1 ] || exit 0
+last=$((n - 1))
+# boot scripts run without /usr/local/sbin in PATH, hence the full paths.
+# Hurd's ps ignores "pid="; match the program name only
+pids=$(ps -e -o pid,args | awk 'NR > 1 && ($2 ~ /^\/hurd\// || $2 ~ /^(ext2fs|rumpdisk|acpi|pci-arbiter)/) {print $1}')
+[ -n "$pids" ] && /usr/local/sbin/cpuset -c $last $pids >/dev/null
+/usr/local/sbin/smpctl -x $last >/dev/null 2>&1
+/usr/local/sbin/smpctl -s

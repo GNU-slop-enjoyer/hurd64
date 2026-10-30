@@ -11,7 +11,7 @@ index ef34ba4..79549b3 100644
 -		# wrapper around kqueue(2).
 +	if host_machine.system() in ['freebsd', 'openbsd', 'gnu']
 +		# On FreeBSD epoll(7) is a userspace wrapper around kqueue(2), on the
-+		# Hurd (Hurd64's epoll-shim) one around poll(2).
++		# Hurd (hurd96's epoll-shim) one around poll(2).
  		epoll_dep = dependency('epoll-shim')
  	else
  		# Otherwise, assume that epoll(7) is supported natively.

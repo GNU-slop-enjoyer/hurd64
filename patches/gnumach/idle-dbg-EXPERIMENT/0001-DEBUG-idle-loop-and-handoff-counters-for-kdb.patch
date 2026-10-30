@@ -16,7 +16,7 @@ index 833822b0..f3509b67 100644
  #if	MACH_FIXPRI
  #include <mach/policy.h>
 +
-+/* DEBUG (tux/idle-dbg): read these from kdb on a hang */
++/* DEBUG (hurd96/idle-dbg): read these from kdb on a hang */
 +volatile unsigned long dbg_idle_iter[NCPUS], dbg_idle_exit[NCPUS];
 +volatile thread_t dbg_idle_seen[NCPUS];
 +volatile processor_t dbg_idle_proc[NCPUS];

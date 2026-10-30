@@ -1,7 +1,7 @@
 Description: USB mice (ums) in the USB keyboard component
  wsmouse attaches from libwscons (WSCONS.ioconf has "wsmouse* at ums?");
  lets a rump client read mouse events from wsmouse.
-Author: Hurd64
+Author: hurd96
 
 --- a/buildrump.sh/src/sys/rump/dev/lib/libukbd/Makefile
 +++ b/buildrump.sh/src/sys/rump/dev/lib/libukbd/Makefile

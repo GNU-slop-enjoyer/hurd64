@@ -1,0 +1,7 @@
+[Desktop Entry]
+Type=Application
+Name=9cynth
+Comment=acme for music
+Exec=9cynth
+Terminal=false
+Categories=AudioVideo;Audio;Player;

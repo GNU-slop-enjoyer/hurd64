@@ -8,7 +8,7 @@ cd "$(dirname "$0")"
 /usr/sbin/e2fsck -fy build.img >/dev/null 2>&1 || true
 rm -f serial.log
 (DISK=prepared-nvme.qcow2 ESPDIR=esp-fb FW=efi NVME_ADDR=0x6 BUS=nvme MEM=3G \
-  EXTRA="-drive id=bd,if=none,file=build.img,format=raw,cache=writeback -device nvme,serial=tuxbuild,drive=bd,addr=0x9" setsid ./run.sh 2 >qemu.log 2>&1 &)
+  EXTRA="-drive id=bd,if=none,file=build.img,format=raw,cache=writeback -device nvme,serial=hurd96build,drive=bd,addr=0x9" setsid ./run.sh 2 >qemu.log 2>&1 &)
 sleep 25
 # OVMF's saved boot order may land in its shell: start GRUB from the ESP (fs0:)
 ./vmctl type 'fs0:\EFI\BOOT\BOOTX64.EFI\n' || true

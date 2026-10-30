@@ -32,7 +32,7 @@ index 4e4f7c2..2964a35 100644
  #define DRM_IOCTL_BASE			'd'
 +#if defined(__GNU__)
 +/* Linux numbering: the Hurd's own _IOWR wants a type code per struct, and
-+   the only DRM there is Linux's, running inside a program (Hurd64 LKL) */
++   the only DRM there is Linux's, running inside a program (hurd96 LKL) */
 +#define DRM_LINUX_IOC(dir,nr,size)	(((unsigned)(dir) << 30) | ((size) << 16) | (DRM_IOCTL_BASE << 8) | (nr))
 +#define DRM_IO(nr)			DRM_LINUX_IOC(0,nr,0)
 +#define DRM_IOR(nr,type)		DRM_LINUX_IOC(2,nr,sizeof(type))

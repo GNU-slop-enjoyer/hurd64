@@ -1,18 +1,15 @@
 # Next session
 
 ## Resume
-"continue" is enough. Read PROJECT_STATUS.md first, then this list. VM scripts: ~/src/hurd64/vm
+"continue" is enough. Read PROJECT_STATUS.md first, then this list. VM scripts: ~/src/hurd96/vm
 (copies in vm/). Stop a VM with `vm/stop.sh` (uses qemu.pid). Never `pkill -f` a pattern.
 
-## WAYLAND DESKTOP (night 2026-10-30): see wayland/README.md
-Works in the VMs: epoll-shim, libwayland 1.24, libdrm 2.4.124, wlroots 0.18.2 (+Xwayland), foot 1.21, Xwayland 24.1.6,
-hurdwm (tiling compositor, fb device output, tuxkbd keys+mouse, Super+Enter/D/J/K/Q/F/P/Esc, launcher in the bar).
-X11 apps (xterm, galculator GTK3) tile next to foot. `desk` starts hurdwm (desk --simple = tuxdesk).
-Image: vm/update-desk.sh (RUMP=0~20250111-10tux4 for the mouse) + vm/update-wayland.sh, tested in run-pc.sh (usb-kbd, usb-mouse).
-rumpkernel 10tux4 = + ums-rump.diff (ums, hidms, tpcalib, mra) for USB mice. DONE 2026-10-30 ~03:35: rump 10tux4 (mouse) + tuxkbd + fb kernel + Wayland/Xwayland/apps + tmpfs /dev/shm,/run/user in
-prepared-install3, tested in run-pc.sh (desk, foot, thunar, USB mouse click focus), and WRITTEN TO THE NETAC DISK with
-install/reinstall.sh (ESP verified, fsck clean). Real-hardware test is the user's; next: amdgpu on iGPU after their reboot.
-rumpkernel 10tux4 = + ums-rump.diff (ums, hidms, tpcalib) for USB mice.
+## DESKTOP: see wayland/README.md
+lilith (compositor) + 9cynth + foot + Xwayland on wlroots 0.19.3, on the fb device with hurd96kbd input. `desk` starts it.
+vm/update-desk.sh builds it and updates prepared-install3 (rump packages are now version 10hurd96.4, repacked from the
+earlier build). Written to the disk 2026-10-30, untested on real hardware. Disk helper: set DISK_HELPER for install/*.sh.
+The first real boot picked the OpenBSD Netac by mistake: run install/boot-entry.sh once as root.
+The old desktops (hurdwm, gpu/desk) are gone; see git history. The plan for amdgpu is to embed LKL in the compositor.
 
 ## GPU port (started 2026-10-29): see gpu/README.md
 amdgpu via LKL (Linux 6.12 as a library) in a Hurd server. DONE: LKL+amdgpu builds on the host (gpu/build-lkl.sh),
@@ -24,23 +21,14 @@ KMS (2026-10-30): gpu/test/kms-test.c sets a mode and shows a dumb buffer drawn 
 lkl_pci=00:0c.0`): VRAM BO mapped via new host op iomem_mmap (proxy of the BAR mapping), picture verified by screendump.
 Fixed-address host mappings now replace what is there (LKL re-sets PTEs without unmapping). Needed: mm/gup.c populates PFN maps under LKL (no page faults in LKL), LKL RAM/mmap moved
 to 0x4000000000/0x1000000000 (Hurd loads programs at 0x400000). Plan: the compositor process embeds LKL+amdgpu.
-tuxdesk (2026-10-30): gpu/desk/ = desktop in one process (LKL+KMS+terminal emulator, TERM=linux). Runs on the Hurd on
-bochs-display: `cd /build/lkl/desk && ./tuxdesk -d bochs-drm -m 256 -k <keys> lkl_pci=00:0c.0`. Keys from a tty/fifo,
-Ctrl+] prefix (n new, Tab next, arrows move, m full, q close, p screenshot, x quit). TODO: USB keyboard+mouse in-process,
-start from login, amdgpu.
-2026-10-30 later: tuxdesk draws on the firmware framebuffer by default (GNU Mach "fb" device, patches/gnumach/fbdev.patch,
-branch tux/fbdev); USB keys come from tuxkbd over /run/tuxkbd.sock (utils/tuxkbd-events.h; console gets keys again when
-tuxdesk hangs up); `desk` (utils/desk) starts it from the console login; Super+Enter/Tab/arrows/M/Q/P/Esc. Installed in
-prepared-install3.qcow2 by vm/update-desk.sh and tested in run-pc.sh. NOT yet on the real disk. TODO: USB mouse (rump ums),
-rebuild image (hostname hurd64), reinstall disk.
 NEXT: user ran `sudo gpu/igpu-vfio.sh` (2026-10-29), VFCT copied, VBIOS 13c0 + 7550 built into lkl.o. After the reboot (check
 `lspci -ks 13:00.0` = vfio-pci, `ulimit -l` = 8388608): copy lkl-s.o to the VM, vm/build-vm-gpu.sh, then `./lkl-boot 1024 lkl_pci=00:0b.0` in /build/lkl/lkl-hurd.
 (Old local branch main-with-binary holds the pre-squash commits incl. a 317 MB binary; never push it.)
 
 ## Where things are (updated 2026-10-29)
-- Upstream checkouts: ~/src/hurd64/upstream/{gnumach,mig,hurd}. Tools: ~/src/hurd64/tools (x86_64-gnu-mig).
-- Kernel: ~/src/hurd64/build/gnumach-smp/gnumach.gz (SMP, ncpus 64, kdb).
-- VM layers: base.img (Debian 2026-03-14, read-only) <- prepared.qcow2 (ssh key, tux-smp default,
+- Upstream checkouts: ~/src/hurd96/upstream/{gnumach,mig,hurd}. Tools: ~/src/hurd96/tools (x86_64-gnu-mig).
+- Kernel: ~/src/hurd96/build/gnumach-smp/gnumach.gz (SMP, ncpus 64, kdb).
+- VM layers: base.img (Debian 2026-03-14, read-only) <- prepared.qcow2 (ssh key, hurd96-smp default,
   smpctl, console=com0) <- work.qcow2 (throwaway, recreated by boot-smp.sh).
 - build.img (20 GB, made by Hurd's own mke2fs, label hurdbuild): holds /build/hurd (upstream source).
   Attach with EXTRA="-drive file=build.img,format=raw,if=ide,index=1,cache=writeback" ./run.sh 4,
@@ -58,9 +46,9 @@ NVMe/NIC/xHCI sit behind PCIe bridges. (2) Hurd reads only the PS/2 keyboard. (3
 RULE NOW: test only on a QEMU machine shaped like the PC: `-machine q35,i8042=off`, devices behind
 pcie-root-port, xHCI + usb-kbd only, UEFI. The user does not want to boot again until it is a usable
 login with a working keyboard. Then continue through all items incl. iGPU + Wayland.
-DONE 2026-10-30: USB KEYBOARD LOGIN WORKS on the PC-shaped VM (login root, run commands). tuxkbd from inittab
-(c:23 line), rump ukbd (rumpkernel -10tux3), /dev/wskbd had the wrong major so tuxkbd mknods /dev/tuxwskbd0
-from devsw_name2chr("wskbd"). ACPICA tracing off (hurd tux/quiet: acpi main.c). Log: /var/log/tuxkbd.log.
+DONE 2026-10-30: USB KEYBOARD LOGIN WORKS on the PC-shaped VM (login root, run commands). hurd96kbd from inittab
+(c:23 line), rump ukbd (rumpkernel -10hurd96.3), /dev/wskbd had the wrong major so hurd96kbd mknods /dev/hurd96wskbd0
+from devsw_name2chr("wskbd"). ACPICA tracing off (hurd hurd96/quiet: acpi main.c). Log: /var/log/hurd96kbd.log.
 Console cleaned up (2026-10-30): rump AB_SILENT, ACPICA tracing off + libacpica stdout discarded, no per-IRQ
 printf in gnumach (patches/gnumach/quiet-intr), ASCII /etc/motd. vm/rebuild-all.sh rebuilds+installs all.
 Left on screen: Debian rcS "Cleaning up temporary files... failed!" + startpar bootclean failure.
@@ -70,7 +58,7 @@ with FSCKFIX=yes, so it repairs itself and never stops in a maintenance shell (2
 Root cause (processes still running when ext2fs syncs at shutdown) is still open.
 DISK REINSTALLED 2026-10-30 from install4.raw = PC-VM-tested image (USB keyboard login, quiet console).
 SMP SHIPPED 2026-10-30 (disk reinstalled from install5.raw): gnumach ncpus=4 (build/gnumach-smp4fb) on the ESP,
-/etc/boot.d/tux-smp -> /usr/local/sbin/tux-smp: all Hurd servers (/hurd/* + boot servers) into a 1-CPU set on the
+/etc/boot.d/hurd96-smp -> /usr/local/sbin/hurd96-smp: all Hurd servers (/hurd/* + boot servers) into a 1-CPU set on the
 last CPU (utils/cpuset), then the other CPUs into the default set (utils/smpctl -x). Tested on run-pc.sh with
 8 vCPUs: 4 started, 3 for programs, stress2 5/5, 3 jobs parallel, apt OK, USB keyboard login OK.
 OPEN: (a) with more than 4 CPUs STARTED (ncpus=8 or 32 on 8 vCPUs) adding even one AP to the default set kills
@@ -87,26 +75,26 @@ while copying: suspect the cross-CPU pmap/TLB shootdown on x86_64 (i386/intel/pm
 signal_cpus, cpus_active handling, and PCID if used). NEXT: read that code, write a small C stress test
 (threads on all CPUs writing to a pipe/file while another thread mmaps/munmaps) to reproduce fast.
 Then iGPU (Granite Ridge), then Wayland. Realtek rge is built in but untested.
-Earlier: PC-shaped VM, vm/run-pc.sh: boots to "Hurd64 console login:" with root ld2 behind a PCIe
-root port, e1000e behind a root port with DHCP + ssh, no PS/2. Fixes: ppb-rump.diff (rumpkernel -10tux2,
+Earlier: PC-shaped VM, vm/run-pc.sh: boots to "hurd96 console login:" with root ld2 behind a PCIe
+root port, e1000e behind a root port with DHCP + ssh, no PS/2. Fixes: ppb-rump.diff (rumpkernel -10hurd96.2,
 rumpdisk-nvme.static + rumpnet relinked), gnumach no-i8042 (kdinit + PS/2 mouse open). NEXT: USB keyboard
-(ukbd-rump.diff -> rumpkernel -10tux3, build tuxkbd, inittab), then quiet the autoconf spam.
+(ukbd-rump.diff -> rumpkernel -10hurd96.3, build hurd96kbd, inittab), then quiet the autoconf spam.
 Old notes: PC-shaped VM vm/run-pc.sh reproduces the photo exactly. kd hung with no i8042
-(fixed: patches/gnumach/no-i8042). ppb-rump.diff written, rumpkernel 0~20250111-10tux2 building in the
+(fixed: patches/gnumach/no-i8042). ppb-rump.diff written, rumpkernel 0~20250111-10hurd96.2 building in the
 build VM (vm/build-vm.sh; build disk is now a 2nd NVMe ld1, IDE panicked in pciide_dma). Every layer is
 repaired offline first (vm/fsck-layer.sh). After the build: dpkg -i the debs into prepared-install3,
 RELINK rumpdisk-nvme.static and rumpnet(.static) against them (static libs!), test with run-pc.sh.
 Fix order: a) ppb in rump pci (ppb-rump.diff: libpci SRCS += ppb.c, PCI.ioconf `ppb* at pci?` +
 `pci* at ppb? bus ?`), check IRQs behind bridges; b) quiet autoconf; c) USB keyboard. PLAN: rump component libukbd (uhidev.c ukbd.c + dev/hid parser; ioconf
 `uhidev* at uhub? port ? configuration ? interface ?`, `ukbd* at uhidev? reportid ?`, `wskbd* at ukbd? console ? mux ?`;
-xhci is already in libpci_usbhc, wskbd in libwscons). C daemon tuxkbd (in Hurd64/utils): links rump +
+xhci is already in libpci_usbhc, wskbd in libwscons). C daemon hurd96kbd (in hurd96/utils): links rump +
 pci_usbhc + usb + ukbd + wscons like rumpdisk, rump_sys_open("/dev/wskbd0"), read wscons_event, US layout +
 shift/ctrl/caps -> bytes into a pty master whose slave runs /bin/login; pty output -> /dev/console (kdfb).
 Replace the console getty with it (inittab).
-NOTE: rumpusbdisk also wants xHCI; tuxkbd owns it, so USB storage is out for now; d) ext2fs fsck errors; e) SMP; f) iGPU; g) Wayland.
+NOTE: rumpusbdisk also wants xHCI; hurd96kbd owns it, so USB storage is out for now; d) ext2fs fsck errors; e) SMP; f) iGPU; g) Wayland.
 
 ## Order (user, 2026-10-29)
-1 SMP hang, 2 >3.5 GB RAM, 3 NVMe, 4 RTL8125, 5 UEFI boot on the real PC, 6 install (wipes tuxmin, final OK first),
+1 SMP hang, 2 >3.5 GB RAM, 3 NVMe, 4 RTL8125, 5 UEFI boot on the real PC, 6 install (wipes the old install, final OK first),
 then GPU on the Granite Ridge iGPU only, then Wayland.
 
 ## State 2026-10-29 evening: items 2, 3, 5, 6 done in QEMU and installed on the disk (UEFI, NVMe root ld2, framebuffer console). Open: item 1 (SMP hang), item 4 (RTL8125 rge component for rumpnet), real-hardware boot test (user), NVMe+AHCI shared-IRQ freeze, USB keyboard.
@@ -117,13 +105,13 @@ Item 4 (rge): DONE as far as QEMU allows (built, linked, installed; see PROJECT_
      EXTRA="-drive file=build.img,format=raw,if=ide,index=2,cache=writeback" vm/run.sh 2`, then in the
      VM `settrans -ac /build /hurd/ext2fs /dev/wd1` (wd1 = label hurdbuild). Log: /build/rk-build.log
      (ends with EXIT=0 on success); .debs land in /build.
-  2. `dpkg -i /build/librump*_0~20250111-10tux1_*.deb`; check /usr/lib/librumpdev_pci_if_rge*.
-  3. Build rumpnet from ~/src/hurd64/upstream/hurd branch tux/rumpnet-rge (git archive | ssh,
+  2. `dpkg -i /build/librump*_0~20250111-10hurd96.1_*.deb`; check /usr/lib/librumpdev_pci_if_rge*.
+  3. Build rumpnet from ~/src/hurd96/upstream/hurd branch hurd96/rumpnet-rge (git archive | ssh,
      configure, `make rumpnet`), copy rumpnet.static to /hurd/rumpnet, check `nm | grep rge_attach`.
   4. Do steps 2-3 in prepared-install.qcow2, add `settrans -c /dev/rge0 /hurd/devnode -M /dev/net rge0`
      and `auto /dev/rge0` + `iface /dev/rge0 inet dhcp` to /etc/network/interfaces, then redo the
      install image (qemu-img convert) and run install/install.sh, or copy just the changed files
-     with `tuxdisk mount 2` + `tuxdisk put 2 <dir>`.
+     with `$DISK_HELPER mount 2` + `$DISK_HELPER put 2 <dir>`.
 
 Item 3: WORKS in the VM (see PROJECT_STATUS.md). Remaining bug: NVMe+AHCI sharing an IRQ line freezes on the next PCI driver start (device/intr.c masking lead). Old notes:
   the stall after `entropy: best effort` in rumpdisk's rump kernel with NVMe loaded.
@@ -133,7 +121,7 @@ Item 3: WORKS in the VM (see PROJECT_STATUS.md). Remaining bug: NVMe+AHCI sharin
      what can block after it; check whether nvme(4) or ld(4) attach adds an entropy source that
      waits for a callout/softint which the Hurd rumpuser never runs.
   NOTE: booting prepared-nvme.qcow2 directly uses up its one-shot next_entry. Re-arm with
-  `grub-reboot tux-up-nvme` from an AHCI boot of it. NVME_ADDR=0x6 puts NVMe on IRQ 10;
+  `grub-reboot hurd96-up-nvme` from an AHCI boot of it. NVME_ADDR=0x6 puts NVMe on IRQ 10;
   give AHCI addr=0x5 to keep it on IRQ 10 too.
   b. Boot NVMe root with networking off (rename /etc/network/interfaces) to see if the rest boots.
   c. kdb is unreachable there (console=com0 masks the kbd pin); use `console=com0` off or `-s`
@@ -145,7 +133,7 @@ Item 4 (RTL8125): NetBSD if_rge.c is in the rumpkernel tree (buildrump.sh/src/sy
   needs a new rump component libpci_if_rge modeled on libpci_if_wm, then rumpnet linking it.
 Item 5 (UEFI): GNU Mach has multiboot2 + EFI system table work upstream (Sept/Oct 2026 commits);
   next is GRUB EFI + multiboot2 on OVMF in QEMU.
-Item 6: install wipes tuxmin; show the plan and get the user's OK first.
+Item 6: install wipes the old install; show the plan and get the user's OK first.
 
 ## Next commands
 0. SMP hang (PROJECT_STATUS.md "The hang, as seen in kdb (corrected)"). Find which userspace
@@ -156,8 +144,8 @@ Item 6: install wipes tuxmin; show the plan and get the user's OK first.
       temp_mapping path, and TLB shootdown for temp_mapping when a second CPU exists.
    c. What a parked AP still does in the kernel: LAPIC timer -> clock_interrupt on APs, pmap
       shootdown IPIs. A missed shootdown could leave a stale kernel mapping on CPU 0.
-   Kernel branches: tux/idle-race (base), tux/bsp-lapic-timer, tux/idle-reread, tux/idle-dbg.
-   Build dirs ~/src/hurd64/build/gnumach-<name>; layers `vm/mklayer.sh <name>`;
+   Kernel branches: hurd96/idle-race (base), hurd96/bsp-lapic-timer, hurd96/idle-reread, hurd96/idle-dbg.
+   Build dirs ~/src/hurd96/build/gnumach-<name>; layers `vm/mklayer.sh <name>`;
    test `NOSMP=1 vm/boot.sh <name> 4 && vm/stress2.sh 4`. Debug-counter addresses: `nm` the build.
 1. Build upstream Hurd in the VM, APs parked (stable):
    `cd /build/hurd && autoreconf -fi && mkdir -p b && cd b && ../configure --without-parted
@@ -167,8 +155,8 @@ Item 6: install wipes tuxmin; show the plan and get the user's OK first.
    the unstripped build.
 3. >3.5 GB RAM I/O error in rumpdisk (DMA address limit).
 4. NVMe for rumpdisk (NetBSD nvme(4)), rge(4) for the RTL8125.
-5. Published: https://github.com/GNU-slop-enjoyer/Hurd64 (public, user approved 2026-10-28). Push after each verified step.
-6. Install decision (user, 2026-10-29): may wipe tuxmin (Netac ...205715) and install WITHOUT asking again, once the image passes boot + disk tests from NVMe in the VM. RAM budget while the user is away: up to 25 GB, never freeze the host.
+5. Published: https://github.com/GNU-slop-enjoyer/hurd96 (public, user approved 2026-10-28). Push after each verified step.
+6. Install decision (user, 2026-10-29): may wipe the old install (Netac ...205715) and install WITHOUT asking again, once the image passes boot + disk tests from NVMe in the VM. RAM budget while the user is away: up to 25 GB, never freeze the host.
 7. Free API: Groq works (openai/gpt-oss-120b, tested 2026-10-29). `freellm models groq` for ids.
 
 Limits: builds -j8 max on the host; RAM up to 25 GB total (user, 2026-10-29). No Python anywhere (user): C for tools, sh for glue. vm/vmctl.c replaces the old Python helpers (build: gcc -O2 -o vm/vmctl vm/vmctl.c).

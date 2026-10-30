@@ -19,4 +19,4 @@ free chat API is not an agent that can safely drive this machine. Supported inst
 ## Other tools
 - Context7 connector: library docs (added 2026-10-28, not used yet).
 - Gmail / Calendar / Drive: connected; no project material found (empty Drive, empty calendar).
-- GitHub: https://github.com/GNU-slop-enjoyer/hurd64, public, created with the user's OK on 2026-10-28.
+- GitHub: https://github.com/GNU-slop-enjoyer/hurd96, public, created with the user's OK on 2026-10-28.

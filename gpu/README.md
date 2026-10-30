@@ -18,7 +18,7 @@ it can't be tested.
 
 | file | what |
 |---|---|
-| `../patches/lkl/0001-...patch` | LKL: kernel FPU support (AMD's display code needs it), `tux_defconfig` = LKL defconfig + `lkl-amdgpu.config` |
+| `../patches/lkl/0001-...patch` | LKL: kernel FPU support (AMD's display code needs it), `hurd96_defconfig` = LKL defconfig + `lkl-amdgpu.config` |
 | `lkl-amdgpu.config` | MMU, PCI without MSI, DRM, amdgpu + DC, the iGPU firmware built in |
 | `lkl-hurd/hurd_host.c` | Hurd host side: contiguous wired kernel RAM (DMA address = physical), BARs mapped directly, INTx via `device_intr_register`, timers (no `timer_create` on the Hurd) |
 | `build-lkl.sh` | builds `lkl.o` + headers on the Linux host |

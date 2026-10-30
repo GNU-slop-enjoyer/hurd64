@@ -1,6 +1,6 @@
 # Building
 
-Host: Gentoo x86_64, gcc. Paths below are under ~/src/hurd64.
+Host: Gentoo x86_64, gcc. Paths below are under ~/src/hurd96.
 
     # GNU Mach headers, then MIG (needs the headers), then the kernel
     T=$PWD/tools

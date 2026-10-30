@@ -1,5 +1,5 @@
 #!/bin/sh
-# boot-smp.sh [cpus] : fresh work.qcow2 on prepared.qcow2 (default entry tux-smp), boot, enable all CPUs
+# boot-smp.sh [cpus] : fresh work.qcow2 on prepared.qcow2 (default entry hurd96-smp), boot, enable all CPUs
 #   NOSMP=1 leaves the APs parked
 set -e
 cd "$(dirname "$0")"
