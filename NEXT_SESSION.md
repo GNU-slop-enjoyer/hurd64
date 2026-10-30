@@ -4,6 +4,13 @@
 "continue" is enough. Read PROJECT_STATUS.md first, then this list. VM scripts: ~/src/hurd64/vm
 (copies in vm/). Stop a VM with `vm/stop.sh` (uses qemu.pid). Never `pkill -f` a pattern.
 
+## WAYLAND DESKTOP (night 2026-10-30): see wayland/README.md
+Works in the VMs: epoll-shim, libwayland 1.24, libdrm 2.4.124, wlroots 0.18.2 (+Xwayland), foot 1.21, Xwayland 24.1.6,
+hurdwm (tiling compositor, fb device output, tuxkbd keys+mouse, Super+Enter/D/J/K/Q/F/P/Esc, launcher in the bar).
+X11 apps (xterm, galculator GTK3) tile next to foot. `desk` starts hurdwm (desk --simple = tuxdesk).
+Image: vm/update-desk.sh (RUMP=0~20250111-10tux4 for the mouse) + vm/update-wayland.sh, tested in run-pc.sh (usb-kbd, usb-mouse).
+rumpkernel 10tux4 = + ums-rump.diff (ums, hidms, tpcalib) for USB mice.
+
 ## GPU port (started 2026-10-29): see gpu/README.md
 amdgpu via LKL (Linux 6.12 as a library) in a Hurd server. DONE: LKL+amdgpu builds on the host (gpu/build-lkl.sh),
 runs inside a Hurd process (lkl-hurd/, test/lkl-boot.c), and the Hurd PCI host code is verified end to end with
