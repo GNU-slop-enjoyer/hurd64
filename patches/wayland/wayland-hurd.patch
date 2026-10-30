@@ -1,0 +1,40 @@
+diff --git a/meson.build b/meson.build
+index ef34ba4..79549b3 100644
+--- a/meson.build
++++ b/meson.build
+@@ -69,9 +69,9 @@ endif
+ config_h.set10('HAVE_BROKEN_MSG_CMSG_CLOEXEC', have_broken_msg_cmsg_cloexec)
+ 
+ if get_option('libraries')
+-	if host_machine.system() in ['freebsd', 'openbsd']
+-		# When building for FreeBSD, epoll(7) is provided by a userspace
+-		# wrapper around kqueue(2).
++	if host_machine.system() in ['freebsd', 'openbsd', 'gnu']
++		# On FreeBSD epoll(7) is a userspace wrapper around kqueue(2), on the
++		# Hurd (Hurd64's epoll-shim) one around poll(2).
+ 		epoll_dep = dependency('epoll-shim')
+ 	else
+ 		# Otherwise, assume that epoll(7) is supported natively.
+diff --git a/src/wayland-os.c b/src/wayland-os.c
+index f00ead4..7db8665 100644
+--- a/src/wayland-os.c
++++ b/src/wayland-os.c
+@@ -125,6 +125,18 @@ wl_os_socket_peercred(int sockfd, uid_t *uid, gid_t *gid, pid_t *pid)
+ 	*pid = ucred.pid;
+ 	return 0;
+ }
++#elif defined(__GNU__)
++/* The Hurd's local sockets do not tell who is on the other end. Clients
++   of a compositor run as the same user, so report that one. */
++int
++wl_os_socket_peercred(int sockfd, uid_t *uid, gid_t *gid, pid_t *pid)
++{
++	(void)sockfd;
++	*uid = getuid();
++	*gid = getgid();
++	*pid = 0;
++	return 0;
++}
+ #else
+ #error "Don't know how to read ucred on this platform"
+ #endif

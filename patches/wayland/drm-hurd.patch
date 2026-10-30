@@ -1,0 +1,87 @@
+diff --git a/include/drm/drm.h b/include/drm/drm.h
+index 4e4f7c2..2964a35 100644
+--- a/include/drm/drm.h
++++ b/include/drm/drm.h
+@@ -41,6 +41,23 @@
+ #include <asm/ioctl.h>
+ typedef unsigned int drm_handle_t;
+ 
++#elif defined(__GNU__)
++
++#include <stdint.h>
++#include <sys/types.h>
++#include <sys/ioctl.h>
++/* the Hurd's sys/ioctl.h has _IO/_IOR/_IOW/_IOWR; no DRM kernel driver here */
++typedef int8_t   __s8;
++typedef uint8_t  __u8;
++typedef int16_t  __s16;
++typedef uint16_t __u16;
++typedef int32_t  __s32;
++typedef uint32_t __u32;
++typedef int64_t  __s64;
++typedef uint64_t __u64;
++typedef size_t   __kernel_size_t;
++typedef unsigned int drm_handle_t;
++
+ #else /* One of the BSDs */
+ 
+ #include <stdint.h>
+@@ -1029,10 +1046,20 @@ extern "C" {
+ #endif
+ 
+ #define DRM_IOCTL_BASE			'd'
++#if defined(__GNU__)
++/* Linux numbering: the Hurd's own _IOWR wants a type code per struct, and
++   the only DRM there is Linux's, running inside a program (Hurd64 LKL) */
++#define DRM_LINUX_IOC(dir,nr,size)	(((unsigned)(dir) << 30) | ((size) << 16) | (DRM_IOCTL_BASE << 8) | (nr))
++#define DRM_IO(nr)			DRM_LINUX_IOC(0,nr,0)
++#define DRM_IOR(nr,type)		DRM_LINUX_IOC(2,nr,sizeof(type))
++#define DRM_IOW(nr,type)		DRM_LINUX_IOC(1,nr,sizeof(type))
++#define DRM_IOWR(nr,type)		DRM_LINUX_IOC(3,nr,sizeof(type))
++#else
+ #define DRM_IO(nr)			_IO(DRM_IOCTL_BASE,nr)
+ #define DRM_IOR(nr,type)		_IOR(DRM_IOCTL_BASE,nr,type)
+ #define DRM_IOW(nr,type)		_IOW(DRM_IOCTL_BASE,nr,type)
+ #define DRM_IOWR(nr,type)		_IOWR(DRM_IOCTL_BASE,nr,type)
++#endif
+ 
+ #define DRM_IOCTL_VERSION		DRM_IOWR(0x00, struct drm_version)
+ #define DRM_IOCTL_GET_UNIQUE		DRM_IOWR(0x01, struct drm_unique)
+diff --git a/xf86drm.c b/xf86drm.c
+index 6ca5626..c0a1348 100644
+--- a/xf86drm.c
++++ b/xf86drm.c
+@@ -56,6 +56,10 @@
+ #endif
+ #ifdef MAJOR_IN_SYSMACROS
+ #include <sys/sysmacros.h>
++
++#ifndef PATH_MAX
++#define PATH_MAX 4096	/* the Hurd has no limit */
++#endif
+ #endif
+ #if HAVE_SYS_SYSCTL_H
+ #include <sys/sysctl.h>
+diff --git a/xf86drm.h b/xf86drm.h
+index 6d91dfb..94bd70f 100644
+--- a/xf86drm.h
++++ b/xf86drm.h
+@@ -56,6 +56,18 @@ extern "C" {
+ #define DRM_IOC_READWRITE	_IOC_READ|_IOC_WRITE
+ #define DRM_IOC(dir, group, nr, size) _IOC(dir, group, nr, size)
+ 
++#elif defined(__GNU__)
++
++/* 4.4BSD-style ioctl numbers from the Hurd's sys/ioctl.h (there is no DRM
++   driver in the kernel; these only have to compile) */
++#include <sys/ioctl.h>
++#define DRM_IOCTL_NR(n)         ((n) & 0xff)
++#define DRM_IOC_VOID            IOC_VOID
++#define DRM_IOC_READ            IOC_OUT
++#define DRM_IOC_WRITE           IOC_IN
++#define DRM_IOC_READWRITE       IOC_INOUT
++#define DRM_IOC(dir, group, nr, size) _IOC(dir, group, nr, size)
++
+ #else /* One of the *BSDs */
+ 
+ #include <sys/ioccom.h>
