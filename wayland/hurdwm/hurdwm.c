@@ -5,8 +5,9 @@
  * wlroots renders the scene in software (pixman) into an off-screen
  * output of the headless backend; every frame the damaged part is copied
  * to the screen the firmware set up (GNU Mach's "fb" device), so no
- * graphics driver is needed. Keys come from tuxkbd (USB keyboard) or,
- * with -k, from a tty or fifo. Clients connect over the usual Wayland
+ * graphics driver is needed. Keys and the mouse come from tuxkbd (USB) or,
+ * with -k, keys from a tty or fifo. A click focuses the window under the
+ * pointer and goes on to it, as does the wheel. Clients connect over the usual Wayland
  * socket in $XDG_RUNTIME_DIR.
  *
  * Windows tile: the first one fills the left half, the others share the
@@ -15,6 +16,7 @@
  *   Super+J/K      next/previous window   Super+Tab  next
  *   Super+Shift+Enter  focused window to the big tile
  *   Super+F        full screen            Super+Q    close window
+ *   Super+D        run a program (type its name, Enter)
  *   Super+P        screenshot (~/hurdwm-N.ppm)
  *   Super+Shift+E or Super+Esc   quit
  * With -k, Ctrl+] then a key stands for Super+key (n = Enter).
@@ -41,7 +43,9 @@
 #include <wlr/interfaces/wlr_keyboard.h>
 #include <wlr/render/allocator.h>
 #include <wlr/render/wlr_renderer.h>
+#include <linux/input-event-codes.h>
 #include <wlr/types/wlr_compositor.h>
+#include <wlr/types/wlr_cursor.h>
 #include <wlr/types/wlr_data_device.h>
 #include <wlr/types/wlr_keyboard.h>
 #include <wlr/types/wlr_output.h>
@@ -75,12 +79,17 @@ struct server {
 	struct wlr_xdg_shell *xdg_shell;
 	struct wlr_seat *seat;
 	struct wlr_keyboard keyboard;
+	struct wlr_cursor *cursor;
+	struct wlr_scene_buffer *arrow;
+	uint32_t buttons;		/* held down */
 	struct wl_list toplevels;	/* tiling order, the first is the big tile */
 	struct toplevel *focused;
 	struct bar bar;
 	struct screen screen;
 	const char *terminal;
 	int width, height;
+	bool launching;		/* Super+D: typing a command into the bar */
+	char command[256];
 
 	struct wl_listener new_output, frame;
 	struct wl_listener new_toplevel, new_popup;
@@ -123,7 +132,8 @@ static void update_bar(struct server *s)
 		titles[n++] = title;
 	}
 	bar_draw(&s->bar, titles, n, focus,
-		 n ? NULL : "Super+Enter opens a terminal");
+		 n ? NULL : "Super+Enter opens a terminal, Super+D runs a program",
+		 s->launching ? s->command : NULL);
 }
 
 static int clock_tick(void *data)
@@ -318,6 +328,7 @@ static void new_toplevel(struct wl_listener *l, void *data)
 	t->frame = wlr_scene_tree_create(s->windows);
 	t->border = wlr_scene_rect_create(t->frame, 0, 0, c_border);
 	t->content = wlr_scene_xdg_surface_create(t->frame, xdg->base);
+	t->frame->node.data = t;
 	xdg->base->data = t->content;
 	wl_list_insert(s->toplevels.prev, &t->link);
 
@@ -501,6 +512,11 @@ static bool binding(struct server *s, xkb_keysym_t sym, uint32_t mods)
 			arrange(s);
 		}
 		return true;
+	case XKB_KEY_d:
+		s->launching = true;
+		s->command[0] = 0;
+		update_bar(s);
+		return true;
 	case XKB_KEY_p: {
 		char path[512];
 		const char *home = getenv("HOME");
@@ -519,12 +535,44 @@ static bool binding(struct server *s, xkb_keysym_t sym, uint32_t mods)
 	return false;
 }
 
+/* a key while the launcher is open: edit the command, Enter runs it */
+static void launcher_key(struct server *s, xkb_keycode_t code)
+{
+	xkb_keysym_t sym = xkb_state_key_get_one_sym(s->keyboard.xkb_state, code);
+	size_t len = strlen(s->command);
+
+	if (sym == XKB_KEY_Return || sym == XKB_KEY_KP_Enter) {
+		if (len)
+			spawn(s->command);
+		s->launching = false;
+	} else if (sym == XKB_KEY_Escape) {
+		s->launching = false;
+	} else if (sym == XKB_KEY_BackSpace) {
+		if (len)
+			s->command[len - 1] = 0;
+	} else {
+		char utf8[8];
+		int n = xkb_state_key_get_utf8(s->keyboard.xkb_state, code, utf8, sizeof utf8);
+		/* the bar font has ASCII */
+		if (n == 1 && utf8[0] >= 0x20 && utf8[0] < 0x7f && len + 1 < sizeof s->command) {
+			s->command[len] = utf8[0];
+			s->command[len + 1] = 0;
+		}
+	}
+	update_bar(s);
+}
+
 static void keyboard_key(struct wl_listener *l, void *data)
 {
 	struct server *s = wl_container_of(l, s, key);
 	struct wlr_keyboard_key_event *ev = data;
 	uint32_t mods = wlr_keyboard_get_modifiers(&s->keyboard);
 
+	if (s->launching) {
+		if (ev->state == WL_KEYBOARD_KEY_STATE_PRESSED)
+			launcher_key(s, ev->keycode + 8);
+		return;
+	}
 	if ((mods & WLR_MODIFIER_LOGO) && ev->state == WL_KEYBOARD_KEY_STATE_PRESSED) {
 		const xkb_keysym_t *syms;
 		int n = xkb_state_key_get_syms(s->keyboard.xkb_state, ev->keycode + 8, &syms);
@@ -552,6 +600,82 @@ static uint32_t now_ms(void)
 	return t.tv_sec * 1000 + t.tv_nsec / 1000000;
 }
 
+/* the window (and surface) under the pointer */
+static struct toplevel *toplevel_at(struct server *s, double x, double y,
+				    struct wlr_surface **surface, double *sx, double *sy)
+{
+	struct wlr_scene_node *node = wlr_scene_node_at(&s->windows->node, x, y, sx, sy);
+
+	*surface = NULL;
+	if (!node || node->type != WLR_SCENE_NODE_BUFFER)
+		return NULL;
+	struct wlr_scene_surface *ss =
+		wlr_scene_surface_try_from_buffer(wlr_scene_buffer_from_node(node));
+	if (ss)
+		*surface = ss->surface;
+	for (struct wlr_scene_tree *t = node->parent; t; t = t->node.parent)
+		if (t->node.data && t->node.parent == s->windows)
+			return t->node.data;
+	return NULL;
+}
+
+static void pointer_update(struct server *s)
+{
+	struct wlr_surface *surface;
+	double sx, sy;
+
+	wlr_scene_node_set_position(&s->arrow->node, s->cursor->x, s->cursor->y);
+	toplevel_at(s, s->cursor->x, s->cursor->y, &surface, &sx, &sy);
+	if (surface) {
+		wlr_seat_pointer_notify_enter(s->seat, surface, sx, sy);
+		wlr_seat_pointer_notify_motion(s->seat, now_ms(), sx, sy);
+	} else if (!s->buttons) {
+		wlr_seat_pointer_clear_focus(s->seat);
+	}
+	wlr_seat_pointer_notify_frame(s->seat);
+}
+
+static void mouse_motion(void *data, int dx, int dy)
+{
+	struct server *s = data;
+
+	wlr_cursor_move(s->cursor, NULL, dx, dy);
+	pointer_update(s);
+}
+
+static void mouse_button(void *data, int button, bool pressed)
+{
+	struct server *s = data;
+	static const uint32_t codes[] = { BTN_LEFT, BTN_MIDDLE, BTN_RIGHT };
+
+	if (button < 0 || button > 2)
+		return;
+	if (pressed) {
+		s->buttons |= 1u << button;
+		struct wlr_surface *surface;
+		double sx, sy;
+		struct toplevel *t = toplevel_at(s, s->cursor->x, s->cursor->y, &surface, &sx, &sy);
+		if (t)
+			focus(s, t);
+	} else {
+		s->buttons &= ~(1u << button);
+	}
+	wlr_seat_pointer_notify_button(s->seat, now_ms(), codes[button],
+		pressed ? WL_POINTER_BUTTON_STATE_PRESSED : WL_POINTER_BUTTON_STATE_RELEASED);
+	wlr_seat_pointer_notify_frame(s->seat);
+}
+
+static void mouse_wheel(void *data, int steps)
+{
+	struct server *s = data;
+
+	/* away from the user scrolls up: a negative vertical axis value */
+	wlr_seat_pointer_notify_axis(s->seat, now_ms(), WL_POINTER_AXIS_VERTICAL_SCROLL,
+		-15.0 * steps, -120 * steps, WL_POINTER_AXIS_SOURCE_WHEEL,
+		WL_POINTER_AXIS_RELATIVE_DIRECTION_IDENTICAL);
+	wlr_seat_pointer_notify_frame(s->seat);
+}
+
 /* keys.c hands us Linux key codes */
 static void key_event(void *data, uint32_t code, bool pressed)
 {
@@ -568,7 +692,9 @@ static int keys_readable(int fd, uint32_t mask, void *data)
 {
 	struct server *s = data;
 
-	if (keys_read(fd, key_event, s) < 0) {
+	static const struct input_fns fns = { key_event, mouse_motion, mouse_button, mouse_wheel };
+
+	if (keys_read(fd, &fns, s) < 0) {
 		wlr_log(WLR_ERROR, "the keyboard went away");
 		wl_event_source_remove(s->keys_source);
 		s->keys_source = NULL;
@@ -688,7 +814,10 @@ int main(int argc, char **argv)
 	s.modifiers.notify = keyboard_modifiers;
 	wl_signal_add(&s.keyboard.events.modifiers, &s.modifiers);
 	wlr_seat_set_keyboard(s.seat, &s.keyboard);
-	wlr_seat_set_capabilities(s.seat, WL_SEAT_CAPABILITY_KEYBOARD);
+	wlr_seat_set_capabilities(s.seat, WL_SEAT_CAPABILITY_KEYBOARD | WL_SEAT_CAPABILITY_POINTER);
+	s.cursor = wlr_cursor_create();
+	wlr_cursor_attach_output_layout(s.cursor, s.layout);
+	s.arrow = bar_arrow(s.top);
 	if (kfd >= 0)
 		s.keys_source = wl_event_loop_add_fd(loop, kfd, WL_EVENT_READABLE, keys_readable, &s);
 
@@ -712,6 +841,8 @@ int main(int argc, char **argv)
 	wl_event_source_timer_update(s.clock_timer, 1000);
 	update_bar(&s);
 
+	wlr_cursor_warp(s.cursor, NULL, s.width / 2, s.height / 2);
+	wlr_scene_node_set_position(&s.arrow->node, s.width / 2, s.height / 2);
 	spawn(s.terminal);
 	wl_display_run(s.display);
 

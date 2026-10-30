@@ -13,6 +13,14 @@ if [ "$1" = --simple ]; then
 	/usr/local/bin/tuxdesk "$@" 2>"$log"
 else
 	export PATH=/usr/local/bin:$PATH
+	# the keyboard layout the Debian way (XKBLAYOUT=de, ...)
+	if [ -r /etc/default/keyboard ]; then
+		. /etc/default/keyboard
+		[ -n "$XKBLAYOUT" ] && export XKB_DEFAULT_LAYOUT="$XKBLAYOUT"
+		[ -n "$XKBVARIANT" ] && export XKB_DEFAULT_VARIANT="$XKBVARIANT"
+		[ -n "$XKBOPTIONS" ] && export XKB_DEFAULT_OPTIONS="$XKBOPTIONS"
+		[ -n "$XKBMODEL" ] && export XKB_DEFAULT_MODEL="$XKBMODEL"
+	fi
 	cd "${HOME:-/root}"
 	/usr/local/bin/hurdwm "$@" 2>"$log"
 fi

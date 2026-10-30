@@ -97,28 +97,51 @@ static int ascii_key(unsigned char c, int *shift)
 	return 0;
 }
 
-static void tap(key_fn fn, void *data, int code, int shift, int super, int ctrl)
+static void tap(const struct input_fns *f, void *data, int code, int shift, int super, int ctrl)
 {
-	if (super) fn(data, KEY_LEFTMETA, true);
-	if (ctrl) fn(data, KEY_LEFTCTRL, true);
-	if (shift) fn(data, KEY_LEFTSHIFT, true);
-	fn(data, code, true);
-	fn(data, code, false);
-	if (shift) fn(data, KEY_LEFTSHIFT, false);
-	if (ctrl) fn(data, KEY_LEFTCTRL, false);
-	if (super) fn(data, KEY_LEFTMETA, false);
+	if (super) f->key(data, KEY_LEFTMETA, true);
+	if (ctrl) f->key(data, KEY_LEFTCTRL, true);
+	if (shift) f->key(data, KEY_LEFTSHIFT, true);
+	f->key(data, code, true);
+	f->key(data, code, false);
+	if (shift) f->key(data, KEY_LEFTSHIFT, false);
+	if (ctrl) f->key(data, KEY_LEFTCTRL, false);
+	if (super) f->key(data, KEY_LEFTMETA, false);
 }
 
-int keys_read(int fd, key_fn fn, void *data)
+int keys_read(int fd, const struct input_fns *f, void *data)
 {
 	if (tuxkbd) {
 		struct tuxkbd_event ev[32];
 		ssize_t r = read(fd, ev, sizeof ev);
 		if (r <= 0)
 			return -1;
-		for (size_t i = 0; i < (size_t)r / sizeof ev[0]; i++)
-			if (ev[i].type == TUXKBD_KEY && ev[i].code < 256 && hid_to_linux[ev[i].code])
-				fn(data, hid_to_linux[ev[i].code], ev[i].value);
+		int dx = 0, dy = 0;
+		for (size_t i = 0; i < (size_t)r / sizeof ev[0]; i++) {
+			switch (ev[i].type) {
+			case TUXKBD_KEY:
+				if (ev[i].code < 256 && hid_to_linux[ev[i].code])
+					f->key(data, hid_to_linux[ev[i].code], ev[i].value);
+				break;
+			case TUXKBD_MOTION:
+				/* gather x and y of one report into one move */
+				if (ev[i].code == 0)
+					dx += ev[i].value;
+				else if (ev[i].code == 1)
+					dy += ev[i].value;
+				else
+					f->wheel(data, ev[i].value);
+				break;
+			case TUXKBD_BUTTON:
+				if (dx || dy)
+					f->motion(data, dx, dy);
+				dx = dy = 0;
+				f->button(data, ev[i].code, ev[i].value);
+				break;
+			}
+		}
+		if (dx || dy)
+			f->motion(data, dx, dy);
 		return 0;
 	}
 
@@ -141,18 +164,18 @@ int keys_read(int fd, key_fn fn, void *data)
 			if (c == 'n')
 				shift = 0;
 			if (code)
-				tap(fn, data, code, shift, 1, 0);
+				tap(f, data, code, shift, 1, 0);
 			continue;
 		}
 		if (c >= 1 && c <= 26 && c != '\r' && c != '\n' && c != '\t' && c != '\b') {
 			/* Ctrl+letter */
 			code = ascii_key('a' + c - 1, &shift);
-			tap(fn, data, code, 0, 0, 1);
+			tap(f, data, code, 0, 0, 1);
 			continue;
 		}
 		code = ascii_key(c, &shift);
 		if (code)
-			tap(fn, data, code, shift, 0, 0);
+			tap(f, data, code, shift, 0, 0);
 	}
 	return 0;
 }

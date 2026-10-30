@@ -1,0 +1,36 @@
+Description: USB mice (ums) in the USB keyboard component
+ wsmouse attaches from libwscons (WSCONS.ioconf has "wsmouse* at ums?");
+ lets a rump client read mouse events from wsmouse.
+Author: Hurd64
+
+--- a/buildrump.sh/src/sys/rump/dev/lib/libukbd/Makefile
++++ b/buildrump.sh/src/sys/rump/dev/lib/libukbd/Makefile
+@@ -1,4 +1,4 @@
+-#	USB keyboards (uhidev + ukbd), modelled on libumass. wskbd comes from libwscons.
++#	USB keyboards and mice (uhidev + ukbd + ums), modelled on libumass. wskbd and wsmouse come from libwscons.
+ #
+ 
+ .PATH:	${.CURDIR}/../../../../dev/usb ${.CURDIR}/../../../../dev/hid
+@@ -7,7 +7,7 @@
+ COMMENT=USB keyboard driver
+ 
+ IOCONF=	UKBD.ioconf
+-SRCS=	uhidev.c ukbd.c hid.c hidkbdmap.c
++SRCS=	uhidev.c ukbd.c hid.c hidkbdmap.c ums.c hidms.c
+ SRCS+=	ukbd_component.c
+ 
+ .include <bsd.lib.mk>
+--- a/buildrump.sh/src/sys/rump/dev/lib/libukbd/UKBD.ioconf
++++ b/buildrump.sh/src/sys/rump/dev/lib/libukbd/UKBD.ioconf
+@@ -1,5 +1,5 @@
+ #
+-# USB keyboards
++# USB keyboards and mice
+ #
+ 
+ ioconf ukbd
+@@ -11,3 +11,4 @@
+ 
+ uhidev*	at uhub? port ? configuration ? interface ?
+ ukbd*	at uhidev? reportid ?
++ums*	at uhidev? reportid ?

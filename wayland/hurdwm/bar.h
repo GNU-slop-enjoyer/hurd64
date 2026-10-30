@@ -14,8 +14,12 @@ struct bar {
 };
 
 void bar_init(struct bar *b, struct wlr_scene_tree *parent, int width);
-/* titles of the windows, the focused one (or -1), a hint when empty */
-void bar_draw(struct bar *b, const char **titles, int n, int focused, const char *hint);
+/* titles of the windows, the focused one (or -1), a hint when empty; with
+   prompt set the bar shows that instead (the launcher) */
+void bar_draw(struct bar *b, const char **titles, int n, int focused, const char *hint,
+	      const char *prompt);
+/* the mouse pointer: an arrow, hot spot at its top left */
+struct wlr_scene_buffer *bar_arrow(struct wlr_scene_tree *parent);
 /* whether the minute changed since the last draw */
 int bar_clock_changed(struct bar *b);
 

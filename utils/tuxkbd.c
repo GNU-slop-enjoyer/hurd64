@@ -8,8 +8,9 @@
  *
  *   tuxkbd [-c console] [-l login]
  *
- * A program can take the keyboard over (tuxdesk does): it connects to
- * /run/tuxkbd.sock and gets key events (tuxkbd-events.h) until it hangs up.
+ * A program can take the keyboard over (the desktop does): it connects to
+ * /run/tuxkbd.sock and gets key events, and USB mouse events, which have
+ * nowhere else to go (tuxkbd-events.h), until it hangs up.
  *
  * Keys typed on a PS/2 keyboard or a serial line reach the console itself and
  * are passed on as well. Run as root, once, from inittab instead of the
@@ -46,10 +47,16 @@ struct wscons_event {
 };
 #define WSCONS_EVENT_KEY_UP	1
 #define WSCONS_EVENT_KEY_DOWN	2
+#define WSCONS_EVENT_MOUSE_UP		4	/* value: button, leftmost 0 */
+#define WSCONS_EVENT_MOUSE_DOWN		5
+#define WSCONS_EVENT_MOUSE_DELTA_X	6
+#define WSCONS_EVENT_MOUSE_DELTA_Y	7	/* up is positive */
+#define WSCONS_EVENT_MOUSE_DELTA_Z	10	/* wheel */
 
 /* the rump kernel runs in this process; ask it for wskbd's real major */
 extern int rumpns_devsw_name2chr(const char *, char *, size_t);
 static const char *kbd_node = "/dev/wskbd";
+static const char *mouse_node = "/dev/wsmouse";
 
 /* USB HID usage codes (ukbd passes them through as key codes) */
 enum {
@@ -218,6 +225,44 @@ static void *keyboard(void *arg)
 	}
 }
 
+/* USB mice: only a client (the desktop) gets their events */
+static void *mouse(void *arg)
+{
+	int fd;
+
+	(void)arg;
+	for (int tries = 0; (fd = rump_sys_open(mouse_node, RUMP_O_RDONLY)) < 0; tries++)
+		sleep(tries < 30 ? 1 : 5);
+	LOG("mouse open (fd %d)\n", fd);
+
+	struct wscons_event ev[32];
+	for (;;) {
+		ssize_t r = rump_sys_read(fd, ev, sizeof ev);
+		if (r <= 0) {
+			usleep(10000);
+			continue;
+		}
+		for (size_t i = 0; i < (size_t)r / sizeof ev[0]; i++) {
+			switch (ev[i].type) {
+			case WSCONS_EVENT_MOUSE_DELTA_X:
+				to_client(TUXKBD_MOTION, 0, ev[i].value);
+				break;
+			case WSCONS_EVENT_MOUSE_DELTA_Y:
+				to_client(TUXKBD_MOTION, 1, -ev[i].value);
+				break;
+			case WSCONS_EVENT_MOUSE_DELTA_Z:
+				to_client(TUXKBD_MOTION, 2, ev[i].value);
+				break;
+			case WSCONS_EVENT_MOUSE_DOWN:
+			case WSCONS_EVENT_MOUSE_UP:
+				to_client(TUXKBD_BUTTON, ev[i].value,
+					  ev[i].type == WSCONS_EVENT_MOUSE_DOWN);
+				break;
+			}
+		}
+	}
+}
+
 /* PS/2 or serial keys still arrive on the console itself: pass them on too */
 static void *console_keys(void *arg)
 {
@@ -330,6 +375,12 @@ int main(int argc, char **argv)
 	LOG("wskbd major %d\n", maj);
 	if (maj >= 0 && rump_sys_mknod("/dev/tuxwskbd0", 0020000 | 0600, (uint64_t)maj << 8) == 0)
 		kbd_node = "/dev/tuxwskbd0";
+	rump_schedule();
+	maj = rumpns_devsw_name2chr("wsmouse", NULL, 0);
+	rump_unschedule();
+	LOG("wsmouse major %d\n", maj);
+	if (maj >= 0 && rump_sys_mknod("/dev/tuxwsmouse0", 0020000 | 0600, (uint64_t)maj << 8) == 0)
+		mouse_node = "/dev/tuxwsmouse0";
 
 	pthread_t kt, st, ct;
 	pthread_create(&kt, NULL, keyboard, NULL);
@@ -338,6 +389,8 @@ int main(int argc, char **argv)
 	pthread_t lt;
 	signal(SIGPIPE, SIG_IGN);
 	pthread_create(&lt, NULL, listener, NULL);
+	pthread_t mt;
+	pthread_create(&mt, NULL, mouse, NULL);
 
 	/* keep a login on the console; start a new one when it exits */
 	for (;;) {

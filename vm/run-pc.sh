@@ -16,7 +16,7 @@ exec qemu-system-x86_64 -pidfile qemu.pid -enable-kvm -cpu host -m "${MEM:-4G}" 
   -drive id=nb,if=none,file=blank-b.qcow2,format=qcow2 -device nvme,serial=blankb,drive=nb,bus=rp2 \
   -drive id=nh,if=none,file="$D",format=qcow2,cache=writeback -device nvme,serial=tuxnvme0,drive=nh,bus=rp3 \
   -netdev user,id=n0,hostfwd=tcp:127.0.0.1:2222-:22 -device e1000e,netdev=n0,bus=rp4 \
-  -device qemu-xhci,id=xhci,bus=rp5 -device usb-kbd,bus=xhci.0 \
+  -device qemu-xhci,id=xhci,bus=rp5 -device usb-kbd,bus=xhci.0 -device usb-mouse,bus=xhci.0 \
   -drive file=fat:rw:"$E",format=raw,if=none,id=esp -device ide-hd,drive=esp,bus=ide.0 \
   -display none -vga std \
   -chardev socket,id=s0,path=ser.sock,server=on,wait=off,logfile=serial.log -serial chardev:s0 \

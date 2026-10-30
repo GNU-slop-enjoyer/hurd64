@@ -93,7 +93,8 @@ int bar_clock_changed(struct bar *b)
 	return strcmp(c, b->clock) != 0;
 }
 
-void bar_draw(struct bar *b, const char **titles, int n, int focused, const char *hint)
+void bar_draw(struct bar *b, const char **titles, int n, int focused, const char *hint,
+	      const char *prompt)
 {
 	struct pixbuf *pb = calloc(1, sizeof *pb);
 	int w = b->width, y = (BAR_HEIGHT - 16) / 2;
@@ -107,6 +108,14 @@ void bar_draw(struct bar *b, const char **titles, int n, int focused, const char
 	now(b->clock);
 	int right = w - 10 - (int)strlen(b->clock) * 8;
 	text(pb->px, w, right, y, b->clock, C_TEXT, 100);
+	if (prompt) {
+		fill(pb->px, w, x, 2, right - 20 - x, BAR_HEIGHT - 4, C_SEL);
+		int e = text(pb->px, w, x + 8, y, "Run: ", C_DIM, right - 28 - x);
+		e = text(pb->px, w, e, y, prompt, C_TEXT, right - 28 - e);
+		fill(pb->px, w, e, y, 8, 16, C_TEXT);	/* the cursor */
+		n = 0;
+		hint = NULL;
+	}
 	for (int i = 0; i < n; i++) {
 		char label[40];
 		strncpy(label, titles[i], sizeof label - 1);
@@ -123,4 +132,44 @@ void bar_draw(struct bar *b, const char **titles, int n, int focused, const char
 		text(pb->px, w, x, y, hint, C_DIM, right - 20 - x);
 	wlr_scene_buffer_set_buffer(b->node, &pb->base);
 	wlr_buffer_drop(&pb->base);
+}
+
+/* X = outline, . = fill */
+static const char *arrow[] = {
+	"X",
+	"XX",
+	"X.X",
+	"X..X",
+	"X...X",
+	"X....X",
+	"X.....X",
+	"X......X",
+	"X.......X",
+	"X........X",
+	"X.....XXXXX",
+	"X..X..X",
+	"X.X X..X",
+	"XX  X..X",
+	"X    X..X",
+	"     X..X",
+	"      XX",
+};
+
+struct wlr_scene_buffer *bar_arrow(struct wlr_scene_tree *parent)
+{
+	int w = 11, h = sizeof arrow / sizeof arrow[0];
+	struct pixbuf *pb = calloc(1, sizeof *pb);
+
+	pb->stride = w * 4;
+	pb->px = calloc((size_t)w * h, 4);
+	wlr_buffer_init(&pb->base, &pb_impl, w, h);
+	for (int y = 0; y < h; y++)
+		for (int x = 0; arrow[y][x]; x++)
+			if (arrow[y][x] == 'X')
+				pb->px[y * w + x] = 0xff000000;
+			else if (arrow[y][x] == '.')
+				pb->px[y * w + x] = 0xffffffff;
+	struct wlr_scene_buffer *node = wlr_scene_buffer_create(parent, &pb->base);
+	wlr_buffer_drop(&pb->base);
+	return node;
 }
