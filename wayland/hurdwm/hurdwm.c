@@ -17,6 +17,7 @@
  *   Super+Shift+Enter  focused window to the big tile
  *   Super+F        full screen            Super+Q    close window
  *   Super+D        run a program (type its name, Enter)
+ *   Super+1..9     show workspace 1..9, with Shift: move the window there
  *   Super+P        screenshot (~/hurdwm-N.ppm)
  *   Super+Shift+E or Super+Esc   quit
  * With -k, Ctrl+] then a key stands for Super+key (n = Enter).
@@ -92,6 +93,7 @@ struct server {
 	struct screen screen;
 	const char *terminal;
 	int width, height;
+	int workspace;		/* shown, 1..9 */
 	bool launching;		/* Super+D: typing a command into the bar */
 	char command[256];
 
@@ -118,6 +120,7 @@ struct toplevel {
 	struct wlr_scene_tree *frame, *content;
 	struct wlr_scene_rect *border;
 	bool mapped, fullscreen;
+	int workspace;
 	struct wlr_xdg_toplevel_decoration_v1 *decoration;
 	struct wl_listener decoration_destroy;
 	struct wl_listener map, unmap, commit, destroy, request_fullscreen, set_title;
@@ -204,8 +207,14 @@ static void update_bar(struct server *s)
 	int n = 0, focus = -1;
 	struct toplevel *t;
 
+	s->bar.workspace = s->workspace;
+	s->bar.used = 0;
 	wl_list_for_each(t, &s->toplevels, link) {
-		if (!t->mapped || n == BAR_MAX_TITLES)
+		if (t->mapped)
+			s->bar.used |= 1u << t->workspace;
+		if (!t->mapped || t->workspace != s->workspace || n == BAR_MAX_TITLES)
+			continue;
+
 			continue;
 		if (t == s->focused)
 			focus = n;
@@ -236,13 +245,17 @@ static void arrange(struct server *s)
 	wl_list_for_each(t, &s->toplevels, link) {
 		if (!t->mapped)
 			continue;
+		if (t->workspace != s->workspace) {
+			wlr_scene_node_set_enabled(&t->frame->node, false);
+			continue;
+		}
 		n++;
 		if (t->fullscreen)
 			full = t;
 	}
 	int ax = 0, ay = BAR_HEIGHT, aw = s->width, ah = s->height - BAR_HEIGHT, i = 0;
 	wl_list_for_each(t, &s->toplevels, link) {
-		if (!t->mapped)
+		if (!t->mapped || t->workspace != s->workspace)
 			continue;
 		int x, y, w, h;
 		if (full) {
@@ -304,7 +317,7 @@ static struct toplevel *neighbour(struct server *s, int dir)
 	int n = 0, at = 0;
 
 	wl_list_for_each(t, &s->toplevels, link)
-		if (t->mapped && n < 64) {
+		if (t->mapped && t->workspace == s->workspace && n < 64) {
 			if (t == s->focused)
 				at = n;
 			list[n++] = t;
@@ -336,7 +349,7 @@ static void toplevel_unmap(struct wl_listener *l, void *data)
 		struct toplevel *o;
 		struct toplevel *next = NULL;
 		wl_list_for_each(o, &s->toplevels, link)
-			if (o->mapped) {
+			if (o->mapped && o->workspace == s->workspace) {
 				next = o;
 				break;
 			}
@@ -405,6 +418,7 @@ static void new_toplevel(struct wl_listener *l, void *data)
 
 	t->server = s;
 	t->xdg = xdg;
+	t->workspace = s->workspace;
 	t->frame = wlr_scene_tree_create(s->windows);
 	t->border = wlr_scene_rect_create(t->frame, 0, 0, c_border);
 	t->content = wlr_scene_xdg_surface_create(t->frame, xdg->base);
@@ -508,6 +522,7 @@ static void x_map(struct wl_listener *l, void *data)
 		wlr_scene_node_set_position(&t->frame->node, t->xs->x, t->xs->y);
 		return;
 	}
+	t->workspace = s->workspace;
 	t->frame = wlr_scene_tree_create(s->windows);
 	t->frame->node.data = t;
 	t->border = wlr_scene_rect_create(t->frame, 0, 0, c_border);
@@ -530,7 +545,7 @@ static void x_unmap(struct wl_listener *l, void *data)
 			s->focused = NULL;
 			struct toplevel *o, *next = NULL;
 			wl_list_for_each(o, &s->toplevels, link)
-				if (o->mapped) {
+				if (o->mapped && o->workspace == s->workspace) {
 					next = o;
 					break;
 				}
@@ -718,6 +733,45 @@ static void spawn(const char *cmd)
 		waitpid(pid, NULL, 0);
 }
 
+/* the first window on the shown workspace */
+static struct toplevel *first_shown(struct server *s)
+{
+	struct toplevel *t;
+
+	wl_list_for_each(t, &s->toplevels, link)
+		if (t->mapped && t->workspace == s->workspace)
+			return t;
+	return NULL;
+}
+
+static void show_workspace(struct server *s, int n)
+{
+	if (n == s->workspace)
+		return;
+	s->workspace = n;
+	if (s->focused) {
+		tl_activate(s->focused, false);
+		wlr_scene_rect_set_color(s->focused->border, c_border);
+		s->focused = NULL;
+	}
+	arrange(s);
+	focus(s, first_shown(s));
+}
+
+static void move_to_workspace(struct server *s, int n)
+{
+	struct toplevel *t = s->focused;
+
+	if (!t || t->workspace == n)
+		return;
+	t->workspace = n;
+	tl_activate(t, false);
+	wlr_scene_rect_set_color(t->border, c_border);
+	s->focused = NULL;
+	arrange(s);
+	focus(s, first_shown(s));
+}
+
 static int screenshot_n;
 
 static bool binding(struct server *s, xkb_keysym_t sym, uint32_t mods)
@@ -815,6 +869,18 @@ static void keyboard_key(struct wl_listener *l, void *data)
 		return;
 	}
 	if ((mods & WLR_MODIFIER_LOGO) && ev->state == WL_KEYBOARD_KEY_STATE_PRESSED) {
+		/* Super+1..9: show workspace, with Shift: move the window there.
+		   The digit without Shift applied (Shift+1 is '!' on most layouts) */
+		const xkb_keysym_t *raw;
+		int nr = xkb_keymap_key_get_syms_by_level(s->keyboard.keymap,
+							  ev->keycode + 8, 0, 0, &raw);
+		if (nr > 0 && raw[0] >= XKB_KEY_1 && raw[0] <= XKB_KEY_9) {
+			if (mods & WLR_MODIFIER_SHIFT)
+				move_to_workspace(s, raw[0] - XKB_KEY_0);
+			else
+				show_workspace(s, raw[0] - XKB_KEY_0);
+			return;
+		}
 		const xkb_keysym_t *syms;
 		int n = xkb_state_key_get_syms(s->keyboard.xkb_state, ev->keycode + 8, &syms);
 		for (int i = 0; i < n; i++)
@@ -958,6 +1024,7 @@ int main(int argc, char **argv)
 	int opt;
 
 	s.terminal = "foot";
+	s.workspace = 1;
 	while ((opt = getopt(argc, argv, "k:s:")) != -1) {
 		if (opt == 'k')
 			keys_path = optarg;

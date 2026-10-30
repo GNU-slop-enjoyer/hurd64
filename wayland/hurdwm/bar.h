@@ -14,6 +14,8 @@ struct bar {
 	struct wlr_scene_buffer *node;
 	int width;
 	char clock[16];
+	int workspace;		/* shown, 1..9 */
+	unsigned used;		/* bit n: workspace n has windows */
 };
 
 void bar_init(struct bar *b, struct wlr_scene_tree *parent, int width);

@@ -20,7 +20,7 @@ Author: Hurd64
 -SRCS=	uhidev.c ukbd.c hid.c hidkbdmap.c
 +SRCS=	uhidev.c ukbd.c hid.c hidkbdmap.c ums.c hidms.c
 +# hidms uses the touch panel calibration from wscons
-+SRCS+=	tpcalib.c
++SRCS+=	tpcalib.c mra.c
  SRCS+=	ukbd_component.c
  
  .include <bsd.lib.mk>

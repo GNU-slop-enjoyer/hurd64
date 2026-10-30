@@ -110,6 +110,17 @@ void bar_draw(struct bar *b, const char **titles, int n, int focused, const char
 	wlr_buffer_init(&pb->base, &pb_impl, w, BAR_HEIGHT);
 	fill(pb->px, w, 0, 0, w, BAR_HEIGHT, C_BAR);
 	int x = text(pb->px, w, 10 * z, y, "Hurd64", C_TEXT, 200 * z) + 20 * z;
+	/* workspaces with windows, and the one shown */
+	for (int n = 1; n <= 9; n++) {
+		if (n != b->workspace && !(b->used & (1u << n)))
+			continue;
+		char d[2] = { (char)('0' + n), 0 };
+		if (n == b->workspace)
+			fill(pb->px, w, x, 2 * z, 24 * z, BAR_HEIGHT - 4 * z, C_SEL);
+		text(pb->px, w, x + 8 * z, y, d, n == b->workspace ? C_TEXT : C_DIM, 8 * z);
+		x += 24 * z + 2 * z;
+	}
+	x += 14 * z;
 
 	now(b->clock);
 	int right = w - 10 * z - (int)strlen(b->clock) * 8 * z;
