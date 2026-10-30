@@ -1,6 +1,6 @@
 # Installation
 
-## What is on the disk (2026-10-29)
+## What is on the disk (2026-10-30)
 Target: Netac NV3000, serial AA20260908500G205715 (Linux names it nvme2n1, PCI 12:00.0, so Hurd
 sees it as ld2: NetBSD's ld numbering follows PCI order, checked in QEMU with three NVMe disks).
 tuxmin was wiped, with the user's OK.

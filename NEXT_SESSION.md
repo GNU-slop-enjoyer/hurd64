@@ -9,12 +9,9 @@ Works in the VMs: epoll-shim, libwayland 1.24, libdrm 2.4.124, wlroots 0.18.2 (+
 hurdwm (tiling compositor, fb device output, tuxkbd keys+mouse, Super+Enter/D/J/K/Q/F/P/Esc, launcher in the bar).
 X11 apps (xterm, galculator GTK3) tile next to foot. `desk` starts hurdwm (desk --simple = tuxdesk).
 Image: vm/update-desk.sh (RUMP=0~20250111-10tux4 for the mouse) + vm/update-wayland.sh, tested in run-pc.sh (usb-kbd, usb-mouse).
-rumpkernel 10tux4 = + ums-rump.diff (ums, hidms, tpcalib, mra) for USB mice. STATE AT USAGE LIMIT (2026-10-30 ~02:10):
-- 10tux4 rebuild with mra.c started in the build VM (/build/rk-build6.log). Earlier tux4 builds missed tpcalib, then mra;
-  so the PC image does NOT yet have the mouse-capable tuxkbd. Next: RUMP=0~20250111-10tux4 vm/update-desk.sh, then
-  vm/update-wayland.sh (Xwayland + apps), then vm/shm-tmpfs.sh in the PC VM (tmpfs /dev/shm, /run/user), test in run-pc.sh.
-- hurdwm workspaces (Super+1..9, Shift moves) tested in the build VM.
-- Then install/reinstall.sh puts the tested image on the Netac disk (user approved).
+rumpkernel 10tux4 = + ums-rump.diff (ums, hidms, tpcalib, mra) for USB mice. DONE 2026-10-30 ~03:35: rump 10tux4 (mouse) + tuxkbd + fb kernel + Wayland/Xwayland/apps + tmpfs /dev/shm,/run/user in
+prepared-install3, tested in run-pc.sh (desk, foot, thunar, USB mouse click focus), and WRITTEN TO THE NETAC DISK with
+install/reinstall.sh (ESP verified, fsck clean). Real-hardware test is the user's; next: amdgpu on iGPU after their reboot.
 rumpkernel 10tux4 = + ums-rump.diff (ums, hidms, tpcalib) for USB mice.
 
 ## GPU port (started 2026-10-29): see gpu/README.md

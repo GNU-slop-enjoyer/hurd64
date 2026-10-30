@@ -10,5 +10,5 @@ cd "$vm"
 ./stop.sh
 ./fsck-layer.sh prepared-install3.qcow2
 qemu-img convert -O raw prepared-install3.qcow2 install-new.raw
-tar -C esp-install-fb -cf esp-install-new.tar .
+tar -C esp-install-fb --owner=0 --group=0 --numeric-owner -cf esp-install-new.tar .
 "$here/install.sh" $N install-new.raw esp-install-new.tar
