@@ -13,7 +13,7 @@ rumpkernel 10tux4 = + ums-rump.diff (ums, hidms, tpcalib, mra) for USB mice. STA
 - 10tux4 rebuild with mra.c started in the build VM (/build/rk-build6.log). Earlier tux4 builds missed tpcalib, then mra;
   so the PC image does NOT yet have the mouse-capable tuxkbd. Next: RUMP=0~20250111-10tux4 vm/update-desk.sh, then
   vm/update-wayland.sh (Xwayland + apps), then vm/shm-tmpfs.sh in the PC VM (tmpfs /dev/shm, /run/user), test in run-pc.sh.
-- hurdwm workspaces (Super+1..9, Shift moves) are written but NOT compiled/tested yet.
+- hurdwm workspaces (Super+1..9, Shift moves) tested in the build VM.
 - Then install/reinstall.sh puts the tested image on the Netac disk (user approved).
 rumpkernel 10tux4 = + ums-rump.diff (ums, hidms, tpcalib) for USB mice.
 

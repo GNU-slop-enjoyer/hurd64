@@ -214,8 +214,6 @@ static void update_bar(struct server *s)
 			s->bar.used |= 1u << t->workspace;
 		if (!t->mapped || t->workspace != s->workspace || n == BAR_MAX_TITLES)
 			continue;
-
-			continue;
 		if (t == s->focused)
 			focus = n;
 		titles[n++] = tl_title(t);
