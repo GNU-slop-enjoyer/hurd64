@@ -2,7 +2,7 @@
 # On Linux, for a quick try with vkms: make linux
 LKL ?= /build/lkl
 CFLAGS = -O2 -g -Wall -I$(LKL)/include
-SRC = desk.c term.c kms.c
+SRC = desk.c term.c kms.c fb.c
 
 tuxdesk: $(SRC) kms.h term.h font8x16.h ../lkl-hurd/liblkl-hurd.a
 	$(CC) $(CFLAGS) -o $@ $(SRC) -Wl,--whole-archive ../lkl-hurd/liblkl-hurd.a \

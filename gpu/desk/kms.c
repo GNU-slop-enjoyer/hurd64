@@ -12,7 +12,7 @@
 #include "../test/linux-drm.h"
 #include "kms.h"
 
-static int logfd = -1;
+static int logfd = -1, started;
 
 static void lkl_print(const char *str, int len)
 {
@@ -66,6 +66,7 @@ int kms_open(struct screen *s, const char *driver, int ram_mib,
 		fprintf(stderr, "tuxdesk: Linux did not start\n");
 		return -1;
 	}
+	started = 1;
 	lkl_sys_mkdir("/dev", 0755);
 	if (lkl_sys_mount("devtmpfs", "/dev", "devtmpfs", 0, NULL) < 0) {
 		fprintf(stderr, "tuxdesk: no devtmpfs\n");
@@ -145,6 +146,10 @@ int kms_open(struct screen *s, const char *driver, int ram_mib,
 	s->width = db.width;
 	s->height = db.height;
 	s->pitch = db.pitch / 4;
+	s->bytes_pitch = db.pitch;
+	s->bpp = 32;
+	s->rpos = 16, s->gpos = 8, s->bpos = 0;
+	s->rlen = s->glen = s->blen = 8;
 	s->pixels = (uint32_t *)p;
 	fprintf(stderr, "tuxdesk: %dx%d at %u Hz\n", s->width, s->height, m->vrefresh);
 	return 0;
@@ -152,5 +157,7 @@ int kms_open(struct screen *s, const char *driver, int ram_mib,
 
 void kms_close(void)
 {
-	lkl_sys_halt();
+	if (started)
+		lkl_sys_halt();
+	started = 0;
 }

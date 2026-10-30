@@ -1,0 +1,198 @@
+From d2e529e69db46ac2279e276e7233e02062c89b0d Mon Sep 17 00:00:00 2001
+From: GNU-slop-enjoyer <johnepstein420@gmail.com>
+Date: Fri, 30 Oct 2026 01:10:34 +0100
+Subject: [PATCH] kd: an "fb" device for programs that draw on the boot
+ framebuffer
+
+device_map maps the framebuffer the boot loader set up, device_get_status
+FB_GET_INFO gives its layout, and device_set_status FB_CONSOLE switches the
+text console off the screen and back on (GNU Mach does not close devices
+when their users go away, so open and close cannot do that).
+---
+ i386/i386at/conf.c |  6 +++
+ i386/i386at/kdfb.c | 92 +++++++++++++++++++++++++++++++++++++++++++++-
+ i386/i386at/kdfb.h | 18 +++++++++
+ 3 files changed, 115 insertions(+), 1 deletion(-)
+
+diff --git a/i386/i386at/conf.c b/i386/i386at/conf.c
+index 9bdd8379..26134f80 100644
+--- a/i386/i386at/conf.c
++++ b/i386/i386at/conf.c
+@@ -36,6 +36,7 @@
+ 
+ #ifndef	MACH_HYP
+ #include <i386at/kd.h>
++#include <i386at/kdfb.h>
+ #define	kdname			"kd"
+ 
+ #if	NCOM > 0
+@@ -135,6 +136,11 @@ struct dev_ops	dev_name_list[] =
+ 	  nodev_async_in,	nulldev_reset,	nulldev_portdeath,	0,
+ 	  nodev_info },
+ 
++	{ "fb",		kdfb_open,	kdfb_close,	nulldev_read,
++	  nulldev_write,	kdfb_getstat,	kdfb_setstat,	kdfb_mmap,
++	  nodev_async_in,	nulldev_reset,	nulldev_portdeath,	0,
++	  nodev_info },
++
+ 	{ memname,	nulldev_open,	nulldev_close,	nulldev_read,
+ 	  nulldev_write,	nulldev_getstat,	nulldev_setstat,		memmmap,
+ 	  nodev_async_in,	nulldev_reset,	nulldev_portdeath,	0,
+diff --git a/i386/i386at/kdfb.c b/i386/i386at/kdfb.c
+index 93759c59..0edda929 100644
+--- a/i386/i386at/kdfb.c
++++ b/i386/i386at/kdfb.c
+@@ -34,6 +34,9 @@
+ #include <vm/vm_kern.h>
+ #include <i386at/kd.h>
+ #include <i386at/kdsoft.h>
++#include <device/device_types.h>
++#include <device/io_req.h>
++#include <i386/vm_param.h>
+ #include <i386at/kdfb.h>
+ 
+ #include "kdfb_font.h"
+@@ -48,6 +51,7 @@ extern struct multiboot_raw_info boot_info;
+ 
+ static unsigned short shadow[CELLS];	/* char | attr << 8 */
+ static volatile unsigned char *fb;	/* NULL until mapped */
++static int suspended;		/* the "fb" device is open: a program owns the screen */
+ static unsigned int pitch, width, height, ox, oy, bytespp;
+ static unsigned int cursor = CELLS;	/* cell index, CELLS = none drawn */
+ static unsigned int rgb[16];		/* VGA palette in the framebuffer's format */
+@@ -90,7 +94,7 @@ draw_cell(unsigned int cell)
+ 	unsigned int x = ox + (cell % COLS) * GLYPH_W;
+ 	unsigned int y = oy + (cell / COLS) * GLYPH_H;
+ 
+-	if (!fb)
++	if (!fb || suspended)
+ 		return;
+ 	for (unsigned int r = 0; r < GLYPH_H; r++) {
+ 		volatile unsigned char *row = fb + (y + r) * pitch + x * bytespp;
+@@ -237,3 +241,89 @@ kdfb_map(void)
+ 	fb = m;
+ 	redraw(0, CELLS);
+ }
++
++/*
++ * The "fb" device: the boot framebuffer for a graphical program.
++ *
++ * device_map gives the framebuffer itself; device_get_status with
++ * FB_GET_INFO gives its layout.  device_set_status with FB_CONSOLE 0 keeps
++ * the console off the screen (it still keeps its text), FB_CONSOLE 1 hands
++ * the screen back and the console redraws.  GNU Mach does not close a
++ * device when its users go away, so this is a switch of its own.
++ */
++
++io_return_t
++kdfb_open(dev_t dev, int flag, io_req_t ior)
++{
++	if (!fb)
++		return D_NO_SUCH_DEVICE;
++	return D_SUCCESS;
++}
++
++static void
++console_on(void)
++{
++	const struct multiboot_framebuffer_info *f = &boot_info.fb_info;
++
++	suspended = 0;
++	if (fb) {
++		memset((void *) fb, 0, (vm_size_t) f->framebuffer_pitch * f->framebuffer_height);
++		redraw(0, CELLS);
++	}
++}
++
++void
++kdfb_close(dev_t dev, int flag)
++{
++	if (suspended)
++		console_on();
++}
++
++io_return_t
++kdfb_setstat(dev_t dev, dev_flavor_t flavor, dev_status_t data,
++	     mach_msg_type_number_t count)
++{
++	if (flavor != FB_CONSOLE)
++		return D_INVALID_OPERATION;
++	if (count < 1)
++		return D_INVALID_SIZE;
++	if (data[0])
++		console_on();
++	else
++		suspended = 1;
++	return D_SUCCESS;
++}
++
++io_return_t
++kdfb_getstat(dev_t dev, dev_flavor_t flavor, dev_status_t data,
++	     mach_msg_type_number_t *count)
++{
++	const struct multiboot_framebuffer_info *f = &boot_info.fb_info;
++
++	if (flavor != FB_GET_INFO)
++		return D_INVALID_OPERATION;
++	if (*count < FB_INFO_COUNT)
++		return D_INVALID_SIZE;
++	data[0] = f->framebuffer_width;
++	data[1] = f->framebuffer_height;
++	data[2] = f->framebuffer_pitch;
++	data[3] = f->framebuffer_bpp;
++	data[4] = f->framebuffer_red_field_position;
++	data[5] = f->framebuffer_red_mask_size;
++	data[6] = f->framebuffer_green_field_position;
++	data[7] = f->framebuffer_green_mask_size;
++	data[8] = f->framebuffer_blue_field_position;
++	data[9] = f->framebuffer_blue_mask_size;
++	*count = FB_INFO_COUNT;
++	return D_SUCCESS;
++}
++
++vm_offset_t
++kdfb_mmap(dev_t dev, vm_offset_t off, vm_prot_t prot)
++{
++	const struct multiboot_framebuffer_info *f = &boot_info.fb_info;
++
++	if (!fb || off >= (vm_offset_t) f->framebuffer_pitch * f->framebuffer_height)
++		return -1;
++	return i386_btop(f->framebuffer_addr + off);
++}
+diff --git a/i386/i386at/kdfb.h b/i386/i386at/kdfb.h
+index bdc91178..14da2164 100644
+--- a/i386/i386at/kdfb.h
++++ b/i386/i386at/kdfb.h
+@@ -11,6 +11,8 @@
+ #define _KDFB_H_
+ 
+ #include <i386at/kdsoft.h>
++#include <device/device_types.h>
++#include <device/io_req.h>
+ 
+ /* kd's display hooks (kd.c) */
+ extern void (*kd_dput)(csrpos_t, char, char);
+@@ -27,4 +29,20 @@ extern int kdfb_setup(void);
+ /* Map the framebuffer and draw what kd printed so far.  Needs kernel VM.  */
+ extern void kdfb_map(void);
+ 
++/* The "fb" device (see kdfb.c).  FB_GET_INFO returns, as ints: width,
++   height, pitch in bytes, bits per pixel, then position and size of the
++   red, green and blue fields.  FB_CONSOLE (set, one int): 0 keeps the
++   console off the screen, 1 gives it back.  */
++#define FB_GET_INFO	(('f' << 16) | 1)
++#define FB_INFO_COUNT	10
++#define FB_CONSOLE	(('f' << 16) | 2)
++
++extern io_return_t kdfb_open(dev_t dev, int flag, io_req_t ior);
++extern void kdfb_close(dev_t dev, int flag);
++extern io_return_t kdfb_getstat(dev_t dev, dev_flavor_t flavor,
++				dev_status_t data, mach_msg_type_number_t *count);
++extern io_return_t kdfb_setstat(dev_t dev, dev_flavor_t flavor,
++				dev_status_t data, mach_msg_type_number_t count);
++extern vm_offset_t kdfb_mmap(dev_t dev, vm_offset_t off, vm_prot_t prot);
++
+ #endif /* _KDFB_H_ */
+-- 
+2.55.0
+

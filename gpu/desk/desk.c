@@ -2,10 +2,12 @@
  *
  *   tuxdesk [-d driver] [-m MiB] [-k keyboard] [-l log] [kernel args...]
  *
- *   -d  DRM driver of the card: amdgpu, bochs-drm, ... (default: any but vkms)
+ *   -d  DRM driver of the card: amdgpu, bochs-drm, ... With neither -d nor
+ *       kernel args tuxdesk draws on the framebuffer the firmware set up.
  *   -m  RAM for Linux inside tuxdesk, MiB (default 512)
  *   -k  where keys come from (default: standard input)
  *   -l  Linux's messages (default /var/log/tuxdesk-linux.log)
+ *   -r  give the screen back to the console and exit (after a crash)
  *   kernel args: lkl_pci=BUS:DEV.FN for the graphics card, and so on
  *
  * Windows are terminals. Keys go to the window in front, except after
@@ -164,6 +166,31 @@ static void draw_bar(void)
 	}
 }
 
+/* one row of the back buffer (XRGB) to the screen, in the screen's format */
+static void put_row(int y)
+{
+	const uint32_t *src = back + (size_t)y * scr.width;
+	uint8_t *dst = (uint8_t *)scr.pixels + (size_t)y * scr.bytes_pitch;
+
+	if (scr.bpp == 32 && scr.rpos == 16 && scr.gpos == 8 && scr.bpos == 0) {
+		memcpy(dst, src, scr.width * 4);
+		return;
+	}
+	for (int x = 0; x < scr.width; x++) {
+		uint32_t c = src[x];
+		uint32_t v = ((c >> 16 & 0xff) >> (8 - scr.rlen)) << scr.rpos
+			| ((c >> 8 & 0xff) >> (8 - scr.glen)) << scr.gpos
+			| ((c & 0xff) >> (8 - scr.blen)) << scr.bpos;
+		if (scr.bpp == 32) {
+			((uint32_t *)dst)[x] = v;
+		} else {
+			dst[3 * x] = v;
+			dst[3 * x + 1] = v >> 8;
+			dst[3 * x + 2] = v >> 16;
+		}
+	}
+}
+
 static void redraw(void)
 {
 	fill(0, 0, scr.width, scr.height, C_DESK);
@@ -178,8 +205,7 @@ static void redraw(void)
 		draw_win(&wins[i], i == nwin - 1);
 	draw_bar();
 	for (int y = 0; y < scr.height; y++)
-		memcpy(scr.pixels + (size_t)y * scr.pitch, back + (size_t)y * scr.width,
-		       scr.width * 4);
+		put_row(y);
 	dirty = 0;
 }
 
@@ -358,10 +384,21 @@ static void tick(void)
 static struct termios saved_tio;
 static int kbd = 0, raw;
 
-static void restore_tty(void)
+/* on the way out, also when killed or crashing: the keyboard tty back to
+   normal, the screen back to the console */
+static void cleanup(void)
 {
 	if (raw)
 		tcsetattr(kbd, TCSANOW, &saved_tio);
+	raw = 0;
+	fb_close();
+}
+
+static void fatal_signal(int sig)
+{
+	cleanup();
+	signal(sig, SIG_DFL);
+	raise(sig);
 }
 
 int main(int argc, char **argv)
@@ -370,14 +407,15 @@ int main(int argc, char **argv)
 	int mib = 512, opt;
 	char args[512] = "";
 
-	while ((opt = getopt(argc, argv, "d:m:k:l:")) != -1) {
+	while ((opt = getopt(argc, argv, "d:m:k:l:r")) != -1) {
 		switch (opt) {
 		case 'd': driver = optarg; break;
 		case 'm': mib = atoi(optarg); break;
 		case 'k': kbd_path = optarg; break;
 		case 'l': log = optarg; break;
+		case 'r': return fb_console_reset() ? 1 : 0;
 		default:
-			fprintf(stderr, "usage: tuxdesk [-d driver] [-m MiB] [-k keyboard] [-l log] [kernel args...]\n");
+			fprintf(stderr, "usage: tuxdesk [-r] [-d driver] [-m MiB] [-k keyboard] [-l log] [kernel args...]\n");
 			return 2;
 		}
 	}
@@ -389,7 +427,8 @@ int main(int argc, char **argv)
 		perror(kbd_path);
 		return 1;
 	}
-	if (kms_open(&scr, driver, mib, args, log))
+	/* the firmware's framebuffer unless a graphics card was named */
+	if (!driver && !*args ? fb_open(&scr) : kms_open(&scr, driver, mib, args, log))
 		return 1;
 	back = malloc((size_t)scr.width * scr.height * 4);
 	if (!back)
@@ -401,8 +440,11 @@ int main(int argc, char **argv)
 		cfmakeraw(&t);
 		tcsetattr(kbd, TCSANOW, &t);
 		raw = 1;
-		atexit(restore_tty);
 	}
+	atexit(cleanup);
+	int sigs[] = { SIGTERM, SIGINT, SIGHUP, SIGQUIT, SIGSEGV, SIGBUS, SIGABRT, SIGFPE };
+	for (size_t i = 0; i < sizeof sigs / sizeof sigs[0]; i++)
+		signal(sigs[i], fatal_signal);
 	signal(SIGPIPE, SIG_IGN);
 
 	tick();
@@ -447,7 +489,7 @@ int main(int argc, char **argv)
 	}
 	while (nwin)
 		close_window(nwin - 1);
-	restore_tty();
+	cleanup();
 	kms_close();
 	return 0;
 }
