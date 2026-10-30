@@ -1,19 +1,26 @@
 #!/bin/sh
-# desk: start the Hurd64 desktop (tuxdesk) from the console.
-#   desk            on the screen the firmware set up, USB keyboard via tuxkbd
-#   desk ARGS...    passed to tuxdesk (see tuxdesk -h)
-# Super+Esc (or Ctrl+] then x) quits and brings the console back.
-log=/var/log/tuxdesk.log
+# desk: start the Hurd64 desktop from the console.
+#   desk            Wayland desktop (hurdwm, wlroots) with foot terminals
+#   desk --simple   the small built-in desktop (tuxdesk) instead
+# Super+Esc quits and brings the console back. Super+Enter opens a terminal.
+log=/var/log/desk.log
 if [ "$(id -u)" != 0 ]; then
 	echo "desk: needs root (the screen and the keyboard belong to root)" >&2
 	exit 1
 fi
-/usr/local/bin/tuxdesk "$@" 2>"$log"
+if [ "$1" = --simple ]; then
+	shift
+	/usr/local/bin/tuxdesk "$@" 2>"$log"
+else
+	export PATH=/usr/local/bin:$PATH
+	cd "${HOME:-/root}"
+	/usr/local/bin/hurdwm "$@" 2>"$log"
+fi
 status=$?
 if [ $status != 0 ]; then
 	# make sure the console has the screen again
 	/usr/local/bin/tuxdesk -r 2>/dev/null
-	echo "desk: tuxdesk stopped (exit $status), see $log:" >&2
+	echo "desk: stopped (exit $status), see $log:" >&2
 	tail -5 "$log" >&2
 fi
 exit $status
