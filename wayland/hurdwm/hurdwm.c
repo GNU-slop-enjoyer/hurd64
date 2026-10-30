@@ -58,6 +58,10 @@
 #include <wlr/util/edges.h>
 #include <wlr/util/log.h>
 #include <xkbcommon/xkbcommon.h>
+#ifdef HURDWM_XWAYLAND
+#include <wlr/xwayland.h>
+#include <xcb/xproto.h>
+#endif
 
 #include "screen.h"
 #include "keys.h"
@@ -96,12 +100,21 @@ struct server {
 	struct wl_listener key, modifiers;
 	struct wl_listener new_decoration;
 	struct wl_event_source *clock_timer, *keys_source;
+#ifdef HURDWM_XWAYLAND
+	struct wlr_xwayland *xwayland;
+	struct wlr_scene_tree *unmanaged;	/* X11 menus and tooltips */
+	struct wl_listener xw_ready, xw_new_surface;
+#endif
 };
 
 struct toplevel {
 	struct wl_list link;
 	struct server *server;
 	struct wlr_xdg_toplevel *xdg;
+#ifdef HURDWM_XWAYLAND
+	struct wlr_xwayland_surface *xs;	/* an X11 window instead */
+	struct wl_listener associate, dissociate, request_configure;
+#endif
 	struct wlr_scene_tree *frame, *content;
 	struct wlr_scene_rect *border;
 	bool mapped, fullscreen;
@@ -109,6 +122,75 @@ struct toplevel {
 	struct wl_listener decoration_destroy;
 	struct wl_listener map, unmap, commit, destroy, request_fullscreen, set_title;
 };
+
+/* what Wayland and X11 windows have in common */
+
+static struct wlr_surface *tl_surface(struct toplevel *t)
+{
+#ifdef HURDWM_XWAYLAND
+	if (t->xs)
+		return t->xs->surface;
+#endif
+	return t->xdg->base->surface;
+}
+
+static const char *tl_title(struct toplevel *t)
+{
+#ifdef HURDWM_XWAYLAND
+	if (t->xs)
+		return t->xs->title && *t->xs->title ? t->xs->title
+			: t->xs->class ? t->xs->class : "X11 window";
+#endif
+	return t->xdg->title && *t->xdg->title ? t->xdg->title
+		: t->xdg->app_id ? t->xdg->app_id : "window";
+}
+
+/* x, y: where the window's content goes on the screen */
+static void tl_place(struct toplevel *t, int x, int y, int w, int h)
+{
+#ifdef HURDWM_XWAYLAND
+	if (t->xs) {
+		wlr_xwayland_surface_configure(t->xs, x, y, w, h);
+		return;
+	}
+#endif
+	wlr_xdg_toplevel_set_size(t->xdg, w, h);
+}
+
+static void tl_activate(struct toplevel *t, bool on)
+{
+#ifdef HURDWM_XWAYLAND
+	if (t->xs) {
+		wlr_xwayland_surface_activate(t->xs, on);
+		if (on)
+			wlr_xwayland_surface_restack(t->xs, NULL, XCB_STACK_MODE_ABOVE);
+		return;
+	}
+#endif
+	wlr_xdg_toplevel_set_activated(t->xdg, on);
+}
+
+static void tl_close(struct toplevel *t)
+{
+#ifdef HURDWM_XWAYLAND
+	if (t->xs) {
+		wlr_xwayland_surface_close(t->xs);
+		return;
+	}
+#endif
+	wlr_xdg_toplevel_send_close(t->xdg);
+}
+
+static void tl_fullscreen(struct toplevel *t, bool on)
+{
+#ifdef HURDWM_XWAYLAND
+	if (t->xs) {
+		wlr_xwayland_surface_set_fullscreen(t->xs, on);
+		return;
+	}
+#endif
+	wlr_xdg_toplevel_set_fullscreen(t->xdg, on);
+}
 
 static const float c_desk[4] = { 0x2d / 255.0f, 0x32 / 255.0f, 0x36 / 255.0f, 1 };
 static const float c_border[4] = { 0x3a / 255.0f, 0x3e / 255.0f, 0x42 / 255.0f, 1 };
@@ -127,9 +209,7 @@ static void update_bar(struct server *s)
 			continue;
 		if (t == s->focused)
 			focus = n;
-		const char *title = t->xdg->title && *t->xdg->title ? t->xdg->title
-			: t->xdg->app_id ? t->xdg->app_id : "window";
-		titles[n++] = title;
+		titles[n++] = tl_title(t);
 	}
 	bar_draw(&s->bar, titles, n, focus,
 		 n ? NULL : "Super+Enter opens a terminal, Super+D runs a program",
@@ -187,7 +267,7 @@ static void arrange(struct server *s)
 		wlr_scene_node_set_position(&t->frame->node, x, y);
 		wlr_scene_rect_set_size(t->border, w, h);
 		wlr_scene_node_set_position(&t->content->node, b, b);
-		wlr_xdg_toplevel_set_size(t->xdg, w - 2 * b, h - 2 * b);
+		tl_place(t, x + b, y + b, w - 2 * b, h - 2 * b);
 		i++;
 	}
 	wlr_scene_node_set_enabled(&s->bar.node->node, !full);
@@ -199,7 +279,7 @@ static void focus(struct server *s, struct toplevel *t)
 	if (s->focused == t && t)
 		return;
 	if (s->focused) {
-		wlr_xdg_toplevel_set_activated(s->focused->xdg, false);
+		tl_activate(s->focused, false);
 		wlr_scene_rect_set_color(s->focused->border, c_border);
 	}
 	s->focused = t;
@@ -208,10 +288,10 @@ static void focus(struct server *s, struct toplevel *t)
 		update_bar(s);
 		return;
 	}
-	wlr_xdg_toplevel_set_activated(t->xdg, true);
+	tl_activate(t, true);
 	wlr_scene_rect_set_color(t->border, c_focus);
 	wlr_scene_node_raise_to_top(&t->frame->node);
-	wlr_seat_keyboard_notify_enter(s->seat, t->xdg->base->surface,
+	wlr_seat_keyboard_notify_enter(s->seat, tl_surface(t),
 				       s->keyboard.keycodes, s->keyboard.num_keycodes,
 				       &s->keyboard.modifiers);
 	update_bar(s);
@@ -413,6 +493,160 @@ static void new_decoration(struct wl_listener *l, void *data)
 	}
 }
 
+#ifdef HURDWM_XWAYLAND
+/* X11 windows (Xwayland). Normal ones tile like the others; override-
+   redirect ones (menus, tooltips) float where they ask to be. */
+
+static void x_map(struct wl_listener *l, void *data)
+{
+	struct toplevel *t = wl_container_of(l, t, map);
+	struct server *s = t->server;
+
+	if (t->xs->override_redirect) {
+		t->frame = wlr_scene_tree_create(s->unmanaged);
+		wlr_scene_subsurface_tree_create(t->frame, t->xs->surface);
+		wlr_scene_node_set_position(&t->frame->node, t->xs->x, t->xs->y);
+		return;
+	}
+	t->frame = wlr_scene_tree_create(s->windows);
+	t->frame->node.data = t;
+	t->border = wlr_scene_rect_create(t->frame, 0, 0, c_border);
+	t->content = wlr_scene_subsurface_tree_create(t->frame, t->xs->surface);
+	t->mapped = true;
+	wl_list_insert(s->toplevels.prev, &t->link);
+	arrange(s);
+	focus(s, t);
+}
+
+static void x_unmap(struct wl_listener *l, void *data)
+{
+	struct toplevel *t = wl_container_of(l, t, unmap);
+	struct server *s = t->server;
+
+	if (t->mapped) {
+		t->mapped = false;
+		wl_list_remove(&t->link);
+		if (s->focused == t) {
+			s->focused = NULL;
+			struct toplevel *o, *next = NULL;
+			wl_list_for_each(o, &s->toplevels, link)
+				if (o->mapped) {
+					next = o;
+					break;
+				}
+			focus(s, next);
+		}
+	}
+	if (t->frame)
+		wlr_scene_node_destroy(&t->frame->node);
+	t->frame = NULL;
+	arrange(s);
+}
+
+static void x_associate(struct wl_listener *l, void *data)
+{
+	struct toplevel *t = wl_container_of(l, t, associate);
+
+	t->map.notify = x_map;
+	wl_signal_add(&t->xs->surface->events.map, &t->map);
+	t->unmap.notify = x_unmap;
+	wl_signal_add(&t->xs->surface->events.unmap, &t->unmap);
+}
+
+static void x_dissociate(struct wl_listener *l, void *data)
+{
+	struct toplevel *t = wl_container_of(l, t, dissociate);
+
+	wl_list_remove(&t->map.link);
+	wl_list_remove(&t->unmap.link);
+}
+
+static void x_request_configure(struct wl_listener *l, void *data)
+{
+	struct toplevel *t = wl_container_of(l, t, request_configure);
+	struct wlr_xwayland_surface_configure_event *ev = data;
+
+	/* tiled windows keep their tile; the others get what they ask */
+	if (t->mapped) {
+		arrange(t->server);
+		return;
+	}
+	wlr_xwayland_surface_configure(t->xs, ev->x, ev->y, ev->width, ev->height);
+	if (t->frame && t->xs->override_redirect)
+		wlr_scene_node_set_position(&t->frame->node, ev->x, ev->y);
+}
+
+static void x_title(struct wl_listener *l, void *data)
+{
+	struct toplevel *t = wl_container_of(l, t, set_title);
+
+	update_bar(t->server);
+}
+
+static void x_fullscreen(struct wl_listener *l, void *data)
+{
+	struct toplevel *t = wl_container_of(l, t, request_fullscreen);
+
+	t->fullscreen = t->xs->fullscreen;
+	wlr_xwayland_surface_set_fullscreen(t->xs, t->fullscreen);
+	if (t->mapped)
+		arrange(t->server);
+}
+
+static void x_destroy(struct wl_listener *l, void *data)
+{
+	struct toplevel *t = wl_container_of(l, t, destroy);
+
+	if (t->xs->surface) {
+		wl_list_remove(&t->map.link);
+		wl_list_remove(&t->unmap.link);
+	}
+	wl_list_remove(&t->associate.link);
+	wl_list_remove(&t->dissociate.link);
+	wl_list_remove(&t->request_configure.link);
+	wl_list_remove(&t->set_title.link);
+	wl_list_remove(&t->request_fullscreen.link);
+	wl_list_remove(&t->destroy.link);
+	if (t->mapped)
+		wl_list_remove(&t->link);
+	if (t->frame)
+		wlr_scene_node_destroy(&t->frame->node);
+	if (t->server->focused == t)
+		t->server->focused = NULL;
+	update_bar(t->server);
+	free(t);
+}
+
+static void x_new_surface(struct wl_listener *l, void *data)
+{
+	struct server *s = wl_container_of(l, s, xw_new_surface);
+	struct wlr_xwayland_surface *xs = data;
+	struct toplevel *t = calloc(1, sizeof *t);
+
+	t->server = s;
+	t->xs = xs;
+	t->associate.notify = x_associate;
+	wl_signal_add(&xs->events.associate, &t->associate);
+	t->dissociate.notify = x_dissociate;
+	wl_signal_add(&xs->events.dissociate, &t->dissociate);
+	t->request_configure.notify = x_request_configure;
+	wl_signal_add(&xs->events.request_configure, &t->request_configure);
+	t->set_title.notify = x_title;
+	wl_signal_add(&xs->events.set_title, &t->set_title);
+	t->request_fullscreen.notify = x_fullscreen;
+	wl_signal_add(&xs->events.request_fullscreen, &t->request_fullscreen);
+	t->destroy.notify = x_destroy;
+	wl_signal_add(&xs->events.destroy, &t->destroy);
+}
+
+static void x_ready(struct wl_listener *l, void *data)
+{
+	struct server *s = wl_container_of(l, s, xw_ready);
+
+	wlr_xwayland_set_seat(s->xwayland, s->seat);
+}
+#endif
+
 /* output: render, then copy to the screen */
 
 static void output_frame(struct wl_listener *l, void *data)
@@ -465,16 +699,23 @@ static void new_output(struct wl_listener *l, void *data)
 
 /* keys */
 
+/* Run cmd detached: the intermediate child exits at once, so programs are
+   not ours to reap (and wlroots can wait for its own children, Xwayland) */
 static void spawn(const char *cmd)
 {
 	pid_t pid = fork();
 
 	if (pid == 0) {
-		setsid();
-		signal(SIGPIPE, SIG_DFL);
-		execl("/bin/sh", "/bin/sh", "-c", cmd, (char *)NULL);
-		_exit(127);
+		if (fork() == 0) {
+			setsid();
+			signal(SIGPIPE, SIG_DFL);
+			execl("/bin/sh", "/bin/sh", "-c", cmd, (char *)NULL);
+			_exit(127);
+		}
+		_exit(0);
 	}
+	if (pid > 0)
+		waitpid(pid, NULL, 0);
 }
 
 static int screenshot_n;
@@ -503,12 +744,12 @@ static bool binding(struct server *s, xkb_keysym_t sym, uint32_t mods)
 		return true;
 	case XKB_KEY_q:
 		if (s->focused)
-			wlr_xdg_toplevel_send_close(s->focused->xdg);
+			tl_close(s->focused);
 		return true;
 	case XKB_KEY_f:
 		if (s->focused) {
 			s->focused->fullscreen = !s->focused->fullscreen;
-			wlr_xdg_toplevel_set_fullscreen(s->focused->xdg, s->focused->fullscreen);
+			tl_fullscreen(s->focused, s->focused->fullscreen);
 			arrange(s);
 		}
 		return true;
@@ -710,15 +951,6 @@ static int quit_signal(int sig, void *data)
 	return 0;
 }
 
-static void reap(int sig)
-{
-	int e = errno;
-
-	while (waitpid(-1, NULL, WNOHANG) > 0)
-		;
-	errno = e;
-}
-
 int main(int argc, char **argv)
 {
 	struct server s = { 0 };
@@ -777,7 +1009,7 @@ int main(int argc, char **argv)
 	}
 	wlr_renderer_init_wl_display(s.renderer, s.display);
 	s.allocator = wlr_allocator_autocreate(s.backend, s.renderer);
-	wlr_compositor_create(s.display, 5, s.renderer);
+	struct wlr_compositor *compositor = wlr_compositor_create(s.display, 5, s.renderer);
 	wlr_subcompositor_create(s.display);
 	wlr_data_device_manager_create(s.display);
 
@@ -785,6 +1017,9 @@ int main(int argc, char **argv)
 	s.scene = wlr_scene_create();
 	s.background = wlr_scene_rect_create(&s.scene->tree, s.width, s.height, c_desk);
 	s.windows = wlr_scene_tree_create(&s.scene->tree);
+#ifdef HURDWM_XWAYLAND
+	s.unmanaged = wlr_scene_tree_create(&s.scene->tree);
+#endif
 	s.top = wlr_scene_tree_create(&s.scene->tree);
 	wlr_scene_attach_output_layout(s.scene, s.layout);
 	bar_init(&s.bar, s.top, s.width);
@@ -823,6 +1058,21 @@ int main(int argc, char **argv)
 	s.cursor = wlr_cursor_create();
 	wlr_cursor_attach_output_layout(s.cursor, s.layout);
 	s.arrow = bar_arrow(s.top);
+#ifdef HURDWM_XWAYLAND
+	/* X11 programs: Xwayland starts when the first one connects */
+	s.xwayland = wlr_xwayland_create(s.display, compositor, true);
+	if (s.xwayland) {
+		s.xw_ready.notify = x_ready;
+		wl_signal_add(&s.xwayland->events.ready, &s.xw_ready);
+		s.xw_new_surface.notify = x_new_surface;
+		wl_signal_add(&s.xwayland->events.new_surface, &s.xw_new_surface);
+		setenv("DISPLAY", s.xwayland->display_name, 1);
+	} else {
+		fprintf(stderr, "hurdwm: no Xwayland, X11 programs will not run\n");
+	}
+#else
+	(void)compositor;
+#endif
 	if (kfd >= 0)
 		s.keys_source = wl_event_loop_add_fd(loop, kfd, WL_EVENT_READABLE, keys_readable, &s);
 
@@ -837,9 +1087,9 @@ int main(int argc, char **argv)
 	}
 	wlr_headless_add_output(s.backend, s.width, s.height);
 	setenv("WAYLAND_DISPLAY", sock, 1);
-	fprintf(stderr, "hurdwm: %dx%d, WAYLAND_DISPLAY=%s\n", s.width, s.height, sock);
+	fprintf(stderr, "hurdwm: %dx%d, WAYLAND_DISPLAY=%s DISPLAY=%s\n", s.width, s.height, sock,
+		getenv("DISPLAY") ? getenv("DISPLAY") : "(none)");
 
-	signal(SIGCHLD, reap);
 	wl_event_loop_add_signal(loop, SIGTERM, quit_signal, s.display);
 	wl_event_loop_add_signal(loop, SIGINT, quit_signal, s.display);
 	s.clock_timer = wl_event_loop_add_timer(loop, clock_tick, &s);
@@ -851,6 +1101,10 @@ int main(int argc, char **argv)
 	spawn(s.terminal);
 	wl_display_run(s.display);
 
+#ifdef HURDWM_XWAYLAND
+	if (s.xwayland)
+		wlr_xwayland_destroy(s.xwayland);
+#endif
 	wl_display_destroy_clients(s.display);
 	wlr_scene_node_destroy(&s.scene->tree.node);
 	wl_display_destroy(s.display);

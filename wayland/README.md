@@ -8,8 +8,9 @@ compositor of our own. `desk` on the console starts it.
 | `epoll-shim/` | epoll, timerfd, signalfd, eventfd for the Hurd on poll() and socketpairs; `make test` |
 | libwayland | `../patches/wayland/wayland-hurd.patch`: use epoll-shim on `gnu`, peer credentials = own user |
 | libdrm 2.4.124 | `../patches/wayland/drm-hurd.patch`: `__GNU__` branch, Linux ioctl numbers, PATH_MAX (only headers/formats are used) |
-| wlroots 0.18.2 | unpatched: `-Dbackends= -Drenderers= -Dallocators= -Dsession=disabled -Dxwayland=disabled -Dwerror=false`, `linux/input-event-codes.h` copied to /usr/local/include |
+| wlroots 0.18.2 | unpatched: `-Dbackends= -Drenderers= -Dallocators= -Dsession=disabled -Dxwayland=enabled -Dwerror=false`, `linux/input-event-codes.h` copied to /usr/local/include |
 | foot 1.21 | `../patches/wayland/foot-hurd.patch` (no SO_DOMAIN) |
+| Xwayland 24.1.6 | `../patches/wayland/xwayland-hurd.patch`: epoll-shim on `gnu`, no LocalAccessScopeUser without peer credentials; `-Dglamor=false -Dglx=false -Ddrm=false -Dsecure-rpc=false -Dxdmcp=false -Dlisten_tcp=false -Dxwayland_ei=false -Dlibdecor=false`; `linux/input.h` = a stub including input-event-codes.h |
 | `hurdwm/` | headless backend + pixman, frames copied to GNU Mach's `fb` device; keys from tuxkbd |
 
 Build order in the build VM (`vm/build-vm.sh`), everything to /usr/local:

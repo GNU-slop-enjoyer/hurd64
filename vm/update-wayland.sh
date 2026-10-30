@@ -18,6 +18,7 @@ rm -f serial.log; (DISK=prepared-install3.qcow2 setsid ./run-pc.sh 2 >qemu.log 2
 ./ssh.sh "DEBIAN_FRONTEND=noninteractive apt-get -y -q install $PKGS 2>&1 | tail -2"
 ./ssh.sh 'tar xf - -C /usr/local && ldconfig && mkdir -p /run/user && ls /usr/local/bin' < tux3-out/wayland.tar
 $SCP ../hurd64/utils/desk root@127.0.0.1:/usr/local/bin/desk
+./ssh.sh 'echo hurd64 > /etc/hostname; sed -i "s/\\btuxhurd\\b/hurd64/g" /etc/hosts /etc/motd 2>/dev/null; true'
 ./ssh.sh 'chmod 755 /usr/local/bin/desk; ldd /usr/local/bin/hurdwm /usr/local/bin/foot | grep "not found"; sync'
 off
 ./fsck-layer.sh prepared-install3.qcow2

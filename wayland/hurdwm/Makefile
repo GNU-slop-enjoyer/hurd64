@@ -2,9 +2,14 @@
 PREFIX ?= /usr/local
 .DEFAULT_GOAL := hurdwm
 PKGS = wlroots-0.18 wayland-server xkbcommon pixman-1 libdrm
+# X11 programs too when wlroots was built with Xwayland
+ifeq ($(shell PKG_CONFIG_PATH=/usr/local/lib/x86_64-gnu/pkgconfig pkg-config --variable=have_xwayland wlroots-0.18),true)
+PKGS += xcb
+XWAYLAND = -DHURDWM_XWAYLAND
+endif
 export PKG_CONFIG_PATH := /usr/local/lib/x86_64-gnu/pkgconfig:$(PKG_CONFIG_PATH)
 CFLAGS ?= -O2 -g
-CFLAGS += -Wall -I. -DWLR_USE_UNSTABLE $(shell pkg-config --cflags $(PKGS))
+CFLAGS += -Wall -I. -DWLR_USE_UNSTABLE $(XWAYLAND) $(shell pkg-config --cflags $(PKGS))
 LDLIBS = $(shell pkg-config --libs $(PKGS))
 OBJ = hurdwm.o screen.o keys.o bar.o
 WP = $(shell pkg-config --variable=pkgdatadir wayland-protocols)
