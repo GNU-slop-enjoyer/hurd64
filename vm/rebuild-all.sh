@@ -7,7 +7,7 @@ SCP="scp -q -i id_hurd -P 2222 -o StrictHostKeyChecking=no -o UserKnownHostsFile
 off() { ./ssh.sh 'sync; poweroff' 2>/dev/null || true; for i in $(seq 90); do kill -0 "$(cat qemu.pid 2>/dev/null)" 2>/dev/null || break; sleep 1; done; ./stop.sh; }
 off
 ./build-vm.sh
-tar -C ../hurd64/utils -cf - tuxkbd.c Makefile.tuxkbd | ./ssh.sh 'cd /build/tuxkbd && tar -xf - && rm -f tuxkbd && make -f Makefile.tuxkbd 2>&1 | grep -E "error|undefined" || true; test -x tuxkbd'
+tar -C ../hurd64/utils -cf - tuxkbd.c tuxkbd-events.h Makefile.tuxkbd | ./ssh.sh 'cd /build/tuxkbd && tar -xf - && rm -f tuxkbd && make -f Makefile.tuxkbd 2>&1 | grep -E "error|undefined" || true; test -x tuxkbd'
 (cd ../upstream/hurd && git archive --prefix=hurd-q/ tux/quiet rumpdisk rumpnet acpi) | ./ssh.sh 'tar -C /build -xf - && cd /build/hurd-q/b && rm -f rumpdisk/rumpdisk.static rumpnet/rumpnet rumpnet/rumpnet.static acpi/acpi.static && make -j2 rumpdisk rumpnet acpi >/build/mkall.log 2>&1 && make -C rumpdisk rumpdisk.static >>/build/mkall.log 2>&1 && make -C rumpnet rumpnet.static >>/build/mkall.log 2>&1 && make -C acpi acpi.static >>/build/mkall.log 2>&1 || { grep -m5 -E "error:|undefined" /build/mkall.log; exit 1; }'
 ./ssh.sh 'tar -cf - -C /build/tuxkbd tuxkbd -C /build/hurd-q/b rumpdisk/rumpdisk.static rumpnet/rumpnet rumpnet/rumpnet.static acpi/acpi.static' | tar -C tux3-out -xf -
 off

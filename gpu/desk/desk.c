@@ -5,7 +5,8 @@
  *   -d  DRM driver of the card: amdgpu, bochs-drm, ... With neither -d nor
  *       kernel args tuxdesk draws on the framebuffer the firmware set up.
  *   -m  RAM for Linux inside tuxdesk, MiB (default 512)
- *   -k  where keys come from (default: standard input)
+ *   -k  where keys come from: a tty or fifo (default: the USB keyboard
+ *       through tuxkbd, or standard input when tuxkbd is not running)
  *   -l  Linux's messages (default /var/log/tuxdesk-linux.log)
  *   -r  give the screen back to the console and exit (after a crash)
  *   kernel args: lkl_pci=BUS:DEV.FN for the graphics card, and so on
@@ -17,6 +18,8 @@
  *   q           close the window   x    quit tuxdesk
  *   p           screenshot (~/tuxdesk-N.ppm)
  *   Ctrl+]      a literal Ctrl+]
+ * On the USB keyboard the Super (Windows) key does the same: Super+Enter,
+ * Super+Tab, Super+arrows, Super+M, Super+Q, Super+P, Super+Esc (quit).
  */
 #define _GNU_SOURCE
 #include <errno.h>
@@ -32,6 +35,7 @@
 #include <unistd.h>
 
 #include "font8x16.h"
+#include "input.h"
 #include "kms.h"
 #include "term.h"
 
@@ -369,6 +373,11 @@ static void keys(const char *buf, ssize_t n)
 	}
 }
 
+static void keys_out(const char *buf, size_t n)
+{
+	keys(buf, n);
+}
+
 static void tick(void)
 {
 	char now[16];
@@ -382,7 +391,7 @@ static void tick(void)
 }
 
 static struct termios saved_tio;
-static int kbd = 0, raw;
+static int kbd = 0, raw, kbd_events;	/* kbd_events: kbd is tuxkbd's socket */
 
 /* on the way out, also when killed or crashing: the keyboard tty back to
    normal, the screen back to the console */
@@ -407,7 +416,7 @@ int main(int argc, char **argv)
 	int mib = 512, opt;
 	char args[512] = "";
 
-	while ((opt = getopt(argc, argv, "d:m:k:l:r")) != -1) {
+	while ((opt = getopt(argc, argv, "d:m:k:l:rh")) != -1) {
 		switch (opt) {
 		case 'd': driver = optarg; break;
 		case 'm': mib = atoi(optarg); break;
@@ -427,6 +436,13 @@ int main(int argc, char **argv)
 		perror(kbd_path);
 		return 1;
 	}
+	if (!kbd_path) {
+		int s = input_connect();
+		if (s >= 0) {
+			kbd = s;
+			kbd_events = 1;
+		}
+	}
 	/* the firmware's framebuffer unless a graphics card was named */
 	if (!driver && !*args ? fb_open(&scr) : kms_open(&scr, driver, mib, args, log))
 		return 1;
@@ -435,7 +451,7 @@ int main(int argc, char **argv)
 		return 1;
 
 	/* keys arrive one by one and are not echoed */
-	if (isatty(kbd) && tcgetattr(kbd, &saved_tio) == 0) {
+	if (!kbd_events && isatty(kbd) && tcgetattr(kbd, &saved_tio) == 0) {
 		struct termios t = saved_tio;
 		cfmakeraw(&t);
 		tcsetattr(kbd, TCSANOW, &t);
@@ -462,7 +478,11 @@ int main(int argc, char **argv)
 			break;
 		tick();
 
-		if (p[0].revents & POLLIN) {
+		if (kbd_events && (p[0].revents & (POLLIN | POLLHUP))) {
+			struct input_out out = { keys_out, command };
+			if (input_read(kbd, &out) < 0)
+				kbd = -1;	/* tuxkbd went away */
+		} else 		if (p[0].revents & POLLIN) {
 			char buf[256];
 			ssize_t r = read(kbd, buf, sizeof buf);
 			if (r > 0)

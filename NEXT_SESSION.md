@@ -18,6 +18,11 @@ tuxdesk (2026-10-30): gpu/desk/ = desktop in one process (LKL+KMS+terminal emula
 bochs-display: `cd /build/lkl/desk && ./tuxdesk -d bochs-drm -m 256 -k <keys> lkl_pci=00:0c.0`. Keys from a tty/fifo,
 Ctrl+] prefix (n new, Tab next, arrows move, m full, q close, p screenshot, x quit). TODO: USB keyboard+mouse in-process,
 start from login, amdgpu.
+2026-10-30 later: tuxdesk draws on the firmware framebuffer by default (GNU Mach "fb" device, patches/gnumach/fbdev.patch,
+branch tux/fbdev); USB keys come from tuxkbd over /run/tuxkbd.sock (utils/tuxkbd-events.h; console gets keys again when
+tuxdesk hangs up); `desk` (utils/desk) starts it from the console login; Super+Enter/Tab/arrows/M/Q/P/Esc. Installed in
+prepared-install3.qcow2 by vm/update-desk.sh and tested in run-pc.sh. NOT yet on the real disk. TODO: USB mouse (rump ums),
+rebuild image (hostname hurd64), reinstall disk.
 NEXT: user ran `sudo gpu/igpu-vfio.sh` (2026-10-29), VFCT copied, VBIOS 13c0 + 7550 built into lkl.o. After the reboot (check
 `lspci -ks 13:00.0` = vfio-pci, `ulimit -l` = 8388608): copy lkl-s.o to the VM, vm/build-vm-gpu.sh, then `./lkl-boot 1024 lkl_pci=00:0b.0` in /build/lkl/lkl-hurd.
 (Old local branch main-with-binary holds the pre-squash commits incl. a 317 MB binary; never push it.)

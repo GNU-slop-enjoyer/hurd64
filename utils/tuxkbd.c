@@ -8,6 +8,9 @@
  *
  *   tuxkbd [-c console] [-l login]
  *
+ * A program can take the keyboard over (tuxdesk does): it connects to
+ * /run/tuxkbd.sock and gets key events (tuxkbd-events.h) until it hangs up.
+ *
  * Keys typed on a PS/2 keyboard or a serial line reach the console itself and
  * are passed on as well. Run as root, once, from inittab instead of the
  * console getty.
@@ -22,6 +25,9 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/ioctl.h>
+#include <sys/socket.h>
+#include <sys/stat.h>
+#include <sys/un.h>
 #include <sys/wait.h>
 #include <termios.h>
 #include <unistd.h>
@@ -29,6 +35,8 @@
 #include <rump/rump.h>
 #include <rump/rump_syscalls.h>
 #include <rump/rumpdefs.h>
+
+#include "tuxkbd-events.h"
 
 /* from NetBSD dev/wscons/wsconsio.h */
 struct wscons_event {
@@ -56,6 +64,9 @@ static const char row_plain[] = "1234567890\r\x1b\x7f\t -=[]\\#;'`,./";
 static const char row_shift[] = "!@#$%^&*()\r\x1b\x7f\t _+{}|~:\"~<>?";
 
 static int master = -1;
+/* a program that took over the keyboard (TUXKBD_SOCKET), or -1 */
+static int client = -1;
+static pthread_mutex_t client_lock = PTHREAD_MUTEX_INITIALIZER;
 static FILE *logf;				/* /var/log/tuxkbd.log */
 
 #define LOG(...) do { if (logf) { fprintf(logf, __VA_ARGS__); fflush(logf); } } while (0)
@@ -116,6 +127,56 @@ static void key(int code, int shift, int ctrl, int alt, int caps)
 		put(buf, n);
 }
 
+/* hand an event to the program that took over the keyboard; 0 if there is none */
+static int to_client(int type, int code, int value)
+{
+	struct tuxkbd_event e = { type, code, value };
+	int sent = 0;
+
+	pthread_mutex_lock(&client_lock);
+	if (client >= 0) {
+		if (write(client, &e, sizeof e) == sizeof e) {
+			sent = 1;
+		} else {
+			LOG("client gone, keys back to the console\n");
+			close(client);
+			client = -1;
+		}
+	}
+	pthread_mutex_unlock(&client_lock);
+	return sent;
+}
+
+/* one program at a time may take over the keyboard; a new one replaces it */
+static void *listener(void *arg)
+{
+	struct sockaddr_un a = { .sun_family = AF_UNIX };
+	int s = socket(AF_UNIX, SOCK_STREAM, 0);
+
+	(void)arg;
+	strncpy(a.sun_path, TUXKBD_SOCKET, sizeof a.sun_path - 1);
+	unlink(TUXKBD_SOCKET);
+	if (s < 0 || bind(s, (struct sockaddr *)&a, sizeof a) < 0 || listen(s, 2) < 0) {
+		LOG("no %s: error %d\n", TUXKBD_SOCKET, errno);
+		return NULL;
+	}
+	chmod(TUXKBD_SOCKET, 0600);
+	for (;;) {
+		int c = accept(s, NULL, NULL);
+		if (c < 0) {
+			if (errno != EINTR)
+				sleep(1);
+			continue;
+		}
+		pthread_mutex_lock(&client_lock);
+		if (client >= 0)
+			close(client);
+		client = c;
+		pthread_mutex_unlock(&client_lock);
+		LOG("keys go to a client now\n");
+	}
+}
+
 static void *keyboard(void *arg)
 {
 	(void)arg;
@@ -142,6 +203,8 @@ static void *keyboard(void *arg)
 		for (size_t i = 0; i < (size_t)r / sizeof ev[0]; i++) {
 			int down = ev[i].type == WSCONS_EVENT_KEY_DOWN;
 			if (ev[i].type != WSCONS_EVENT_KEY_DOWN && ev[i].type != WSCONS_EVENT_KEY_UP)
+				continue;
+			if (to_client(TUXKBD_KEY, ev[i].value, down))
 				continue;
 			switch (ev[i].value) {
 			case K_LSHIFT: case K_RSHIFT: shift = down; continue;
@@ -272,6 +335,9 @@ int main(int argc, char **argv)
 	pthread_create(&kt, NULL, keyboard, NULL);
 	pthread_create(&st, NULL, screen, &out);
 	pthread_create(&ct, NULL, console_keys, &out);
+	pthread_t lt;
+	signal(SIGPIPE, SIG_IGN);
+	pthread_create(&lt, NULL, listener, NULL);
 
 	/* keep a login on the console; start a new one when it exits */
 	for (;;) {
